@@ -10,7 +10,7 @@ FunctionInfo.so: FunctionInfo.o
 	$(CXX) $(CXXFLAGS) -shared -fPIC $^ -o $@
 
 clean:
-	rm -f FunctionInfo.o *~ *.so
+	rm -f *.o *~ *.so *.finfo *.out
 
 TEST = opt -load FunctionInfo.so -function-info
 
