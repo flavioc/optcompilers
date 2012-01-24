@@ -12,10 +12,14 @@ FunctionInfo.so: FunctionInfo.o
 clean:
 	rm -f FunctionInfo.o *~ *.so
 
+TEST = opt -load FunctionInfo.so -function-info
+
 load:
-	opt -load FunctionInfo.so -function-info loop.o -o out
+	$(TEST) loop.o -o loop.out
+	$(TEST) other.o -o other.out
 
 LLVM = llvm-gcc -O -emit-llvm -c
 
 compile:
 	$(LLVM) other.c
+	$(LLVM) loop.c

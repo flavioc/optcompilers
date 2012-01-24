@@ -28,7 +28,7 @@ class FunctionInfo : public ModulePass
    typedef map<string, info> map_functions;
    map<string, info> data;
 
-  //output the function information to a file
+  // output the function information to a file
   void printFunctionInfo(Module& M)
   {
     std::string name = M.getModuleIdentifier() + ".finfo";
@@ -41,6 +41,7 @@ class FunctionInfo : public ModulePass
     for(; it != data.end(); it++) {
        info& f(it->second);
        const string& name(it->first);
+       
        file << name << '\t' << f.args << '\t' << f.calls << '\t' << f.blocks << '\t' << f.insts;
        
        file << endl;
@@ -49,6 +50,7 @@ class FunctionInfo : public ModulePass
   
   void findCallSites(Function &F)
   {
+     // iterate over all instructions
      for(Function::BasicBlockListType::iterator bl(F.begin()); bl != F.end(); ++bl) {
         BasicBlock &block(*bl);
         BasicBlock::iterator it(block.begin());
@@ -73,6 +75,7 @@ class FunctionInfo : public ModulePass
   }
   
 public:
+   
 	static char ID;
 
 	FunctionInfo() :
@@ -118,19 +121,19 @@ public:
   
   virtual bool runOnModule(Module& M)
   {
-    std::cerr << "15745 Functions Information Pass \n"; //remove this
-    
     for (Module::iterator MI = M.begin(), ME = M.end(); MI != ME; ++MI)
 	   runOnFunction(*MI);
-    for (Module::iterator MI = M.begin(), ME = M.end(); MI != ME; ++MI) {
+
+    for (Module::iterator MI = M.begin(), ME = M.end(); MI != ME; ++MI)
       findCallSites(*MI);
-    }
       
     printFunctionInfo(M);
+
     return false;
   }
 };
 
 char FunctionInfo::ID = 0;
 RegisterPass<FunctionInfo> X("function-info", "15745: Functions Information");
+
 }
