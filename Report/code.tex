@@ -1,0 +1,51 @@
+\section{Pass 1 - Meet the functions}
+
+For this pass, we implemented a data structure, \texttt{info}, that contains all the statistics of a function. We also have a dictionary (implemented as a \texttt{map})
+   that maps function names to \texttt{info}. For each function, we collect all the basic information that is available through the \texttt{Function} class. To count the number
+   of blocks and instructions, we use the blocks iterator and sum the number of instructions per block. Finally, to count the number of call sites, we iterate over the code of
+   the module (by blocks) and check for \texttt{CallInst} instructions.
+
+\section{Pass 2 - Optimize the Block}
+
+This pass iterates over all the blocks of the module and performs two operations:
+
+\begin{itemize}
+   \item Simple Optimizations: algebraic identities, strengh reductions, and identities.
+   \item Constant Folding: constants are folded and certain instructions (like dead \texttt{store}'s).
+   \item Removal of \texttt{alloca} instructions: certain instructions that are no longer used inside the block.
+\end{itemize}
+
+\subsection{Simple Optimizations}
+
+In this phase, we iterate over the instructions of a block. We use a stack of \texttt{load} instructions, where we push (at most) the latest two \texttt{load} instructions.
+
+When the stack contains 2 \texttt{load}'s, it means that both places are actually the same (we check this). This fact is used to optimize divisions (x/x) when a division operation
+appears next. Here, we delete both \texttt{load}'s and replace the division instruction with a constant value (using \texttt{ReplaceInstWithValue}).
+
+
+When the stack contains only 1 \texttt{load}, we may perform the other algebraic identities ($x + 0$, $x / 1$, $x * 2$, $x / 2$, etc). We check if one operand is a constant value and perform
+the corresponding replaces and deletion of the load instruction. We also perform a simple optimization when we have a \texttt{load} followed by a \texttt{store} to the same place,
+    by deleting both instructions. This last situation may happen because of other optimizations.
+
+\subsection{Constant Folding}
+
+In constant folding, we also iterate over the instructions of a basic block. We maintain a dictionary (\texttt{map}), that maps \texttt{Value}'s to \texttt{Value}'s, where the latter is a constant value.
+
+Whenever we have a store where the content is a constant, we add this fact to the dictionary (by taking the store destination and value) and we also remove the store since it's not needed anymore. (Note however, that we don't remove the last store that is used for function return). Next, when we find some \texttt{load} instruction that attempts to load some value that is present in our dictionary, we use
+\texttt{ReplaceInstWithValue}, which automatically removes this \texttt{load} instruction and every reference to this value (before the next store).
+
+The most interesting part is when operations, due to so many replaces, are applied to constant arguments. Here, we read both constants and compute the final value and then we replace the instruction with the computed value, again with \texttt{ReplaceInstWithValue}.
+
+\subsection{Removal of \texttt{alloca}}
+
+In this final phase, we remove certain instructions that are dead. For this we check if the instruction (the value) is don't used anywhere, by executing \texttt{use\_empty}.
+
+\section{Code - Pass 1}
+
+\lstinputlisting{}
+
+\section{Code - Pass 2}
+
+\lstinputlisting{}
+
+
