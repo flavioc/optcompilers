@@ -38,14 +38,14 @@ The most interesting part is when operations, due to so many replaces, are appli
 
 \subsection{Removal of \texttt{alloca}}
 
-In this final phase, we remove certain instructions that are dead. For this we check if the instruction (the value) is don't used anywhere, by executing \texttt{use\_empty}.
+In this final phase, we remove certain instructions that are dead. For this we check if the instruction (the value) isn't used anywhere, by executing \texttt{use\_empty}.
 
-\section{Code - Pass 1}
+\section{Code - Meet the Functions}
 
-\lstinputlisting{}
+{\tiny \lstinputlisting{../FunctionInfo/FunctionInfo.cpp}}
 
-\section{Code - Pass 2}
+\section{Code - Optimize the Block}
 
-\lstinputlisting{}
+{\tiny \lstinputlisting{../LocalOpts/LocalOpts.cpp}}
 
 
