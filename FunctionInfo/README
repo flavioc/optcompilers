@@ -1,0 +1,8 @@
+To compile the pass:
+$ make
+
+To compile the examples:
+$ make compile
+
+To run the examples
+$ make load
