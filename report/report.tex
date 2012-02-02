@@ -1,8 +1,8 @@
 \documentclass[12pt]{article}
 
 
-\author{}
-\title{}
+\author{Fl\'{a}vio Cruz and Richard Veras}
+\title{Assignment 1}
 
 \usepackage{amsmath}
 \usepackage{amsfonts}   % if you want the fonts
@@ -10,12 +10,24 @@
 %\usepackage{savetrees}
 \usepackage{algorithmic}
 \usepackage{graphicx}
+\usepackage{listings}
+
 
 \begin{document}
 \maketitle
 
-\section{Problem}
+\input{../Report/code}
+
+
+\section{Problems}
+
 \subsection{CFG Basics}
+
+%\begin{figure}[h]
+\begin{minipage}[b]{0.5\linewidth}
+\centering
+
+
 \begin{tabular}{| l l| l}
 %  LABEL& EXPR & BASIC BLOCK \\
   \cline{0-1}
@@ -44,7 +56,27 @@
 
 \end{tabular}
 
-\includegraphics{prob_51_cfg.png}
+%\caption{ Here we have the basic blocks of this code sample labeled. }
+\label{fig:figure1}
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}[b]{0.5\linewidth}
+\centering
+
+
+\includegraphics[scale=.3]{prob_51_cfg.png}
+
+
+%\caption{This graph corresponds to the control flow graph of our code sample.}
+\label{fig:figure2}
+\end{minipage}
+%\end{figure}
+
+
+
+
+
+
 
 \subsection{Available Expressions}
 
