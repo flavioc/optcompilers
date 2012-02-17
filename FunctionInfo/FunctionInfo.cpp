@@ -35,19 +35,19 @@ class FunctionInfo : public ModulePass
     std::ofstream file(name.c_str());
 
     map_functions::iterator it(data.begin());
-    
+
     file << "Name\t# Args\t# Calls\t# Blocks\t# Insts" << endl;
-    
+
     for(; it != data.end(); it++) {
        info& f(it->second);
        const string& name(it->first);
-       
+
        file << name << '\t' << f.args << '\t' << f.calls << '\t' << f.blocks << '\t' << f.insts;
-       
+
        file << endl;
     }
   }
-  
+
   void findCallSites(Function &F)
   {
      // iterate over all instructions
@@ -55,7 +55,7 @@ class FunctionInfo : public ModulePass
         BasicBlock &block(*bl);
         BasicBlock::iterator it(block.begin());
         BasicBlock::iterator end(block.end());
-        
+
         for(; it != end; ++it) {
            Instruction& i(*it);
            if(CallInst::classof(&i)) {
@@ -73,9 +73,9 @@ class FunctionInfo : public ModulePass
         }
       }
   }
-  
+
 public:
-   
+
 	static char ID;
 
 	FunctionInfo() :
@@ -92,7 +92,7 @@ public:
   {
     AU.setPreservesAll();
   }
-	
+
   virtual bool runOnFunction(Function &F)
   {
      // Function > GlobalValue > Value
@@ -101,24 +101,24 @@ public:
 
      f.args = F.getFunctionType()->getNumParams();
      f.calls = 0;
-     
+
      Function::BasicBlockListType::iterator bl(F.begin());
-     
+
      f.blocks = 0;
      f.insts = 0;
-     
+
      for(; bl != F.end(); ++bl) {
         f.blocks++;
         f.insts += (*bl).size();
      }
-     
+
      // add to dictionary
      data[name] = f;
-     
+
      return false;
   }
 
-  
+
   virtual bool runOnModule(Module& M)
   {
     for (Module::iterator MI = M.begin(), ME = M.end(); MI != ME; ++MI)
@@ -126,7 +126,7 @@ public:
 
     for (Module::iterator MI = M.begin(), ME = M.end(); MI != ME; ++MI)
       findCallSites(*MI);
-      
+
     printFunctionInfo(M);
 
     return false;

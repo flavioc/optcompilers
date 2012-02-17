@@ -1,5 +1,7 @@
 
-CXXFLAGS = $(shell $(HOME)/llvm/bin/llvm-config --cxxflags all) -g
+CXXFLAGS = -rdynamic $(shell $(HOME)/WORKING/builds/current/llvm/bin/llvm-config --cxxflags all) -g
+#CXXFLAGS =  $(shell $(HOME)/WORKING/builds/current/llvm/bin/llvm-config --cxxflags all) -g
+
 FILE = LocalOpts
 
 all: $(FILE).so

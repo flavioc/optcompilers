@@ -1,10 +1,12 @@
+CXXFLAGS = -rdynamic $(shell $(HOME)/WORKING/builds/current/llvm/bin/llvm-config --cxxflags all) -g
+#CXXFLAGS = $(shell $(HOME)/llvm/bin/llvm-config --cxxflags all) -g -O0
 
-CXXFLAGS = $(shell $(HOME)/llvm/bin/llvm-config --cxxflags all) -g -O0
 
 all: FunctionInfo.so
 
-FunctionInfo.so: FunctionInfo.o
-	g++ -dylib -flat_namespace -undefined suppress FunctionInfo.o -o FunctionInfo.so
+#FunctionInfo.so: FunctionInfo.o
+#	g++ -dylib -flat_namespace -undefined suppress FunctionInfo.o -o FunctionInfo.so
+#	g++ -dylib -flat_namespace -undefined  FunctionInfo.o -o FunctionInfo.so
 
 %.so: %.o
 	$(CXX) $(CXXFLAGS) -shared -fPIC $^ -o $@
@@ -12,13 +14,14 @@ FunctionInfo.so: FunctionInfo.o
 clean:
 	rm -f *.o *~ *.so *.finfo *.out
 
-TEST = opt -load FunctionInfo.so -function-info
+TEST = opt -load ./FunctionInfo.so -function-info
 
 load:
 	$(TEST) loop.o -o loop.out
 	$(TEST) other.o -o other.out
 
-LLVM = llvm-gcc -O -emit-llvm -c
+#LLVM = llvm-gcc -O -emit-llvm -c
+LLVM = clang -O -emit-llvm -c
 
 compile:
 	$(LLVM) other.c

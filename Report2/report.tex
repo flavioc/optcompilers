@@ -1,16 +1,18 @@
 \documentclass[12pt]{article}
 
 
+
 \author{Fl\'{a}vio Cruz and Richard Veras}
 \title{Assignment 2}
 
 \usepackage{amsmath}
 \usepackage{amsfonts}   % if you want the fonts
 \usepackage{amssymb}    % if you want extra symbols
-%\usepackage{savetrees}
+\usepackage{savetrees}
 \usepackage{algorithmic}
 \usepackage{graphicx}
 \usepackage{listings}
+
 
 
 \begin{document}
@@ -128,4 +130,18 @@ The final CFG is shown in Fig.~\ref{fig:loop}.
     \label{fig:loop}
 \end{figure}
 
+
+\section{Liveness and Reaching Definitions}
+
+The implementation of both passes approached the analysis problem using the
+iterative framework method. The interface to the actual framework was not
+entirely implemented in a modular fashion, but because of compartmentalization
+it could easily be modified to be more modular.
+
+One slight bug at the moment is that for reverse traversals program points
+display a previous result. Unfortunately this could not be resolved in time.
+
+{\tiny \lstinputlisting{../../../hw_02/iterative_framework/live/Live.cpp}}
+
+{\tiny \lstinputlisting{../../../hw_02/iterative_framework/reaching_definition/ReachingDef.cpp}}
 \end{document}
