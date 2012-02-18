@@ -2,6 +2,7 @@
 #include "llvm/Function.h"
 #include "llvm/Module.h"
 #include "llvm/Instruction.h"
+#include "llvm/Constants.h"
 #include "llvm/Instructions.h"
 #include "llvm/LLVMContext.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
@@ -448,14 +449,14 @@ class LocalOpts : public ModulePass
       BasicBlock::iterator it(blk.begin());
       BasicBlock::iterator end(blk.end());
 
-      for(; it != end; ++it) {
+      for(; it != end;) {
          Instruction& instr(*it);
+         it++;
 
          if(AllocaInst::classof(&instr)) {
             AllocaInst *alloc((AllocaInst*)&instr);
 
             if(alloc->use_empty()) {
-               --it;
                alloc->eraseFromParent();
                cout << "Removing an unused alloc...\n";
             }
