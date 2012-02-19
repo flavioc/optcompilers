@@ -25,7 +25,8 @@ using namespace llvm;
 using namespace std;
 
 
-IterativeFramework::IterativeFramework(Function &F)
+IterativeFramework::IterativeFramework(Function &F, graph_type_t gra, direction_t dir):
+   direction(dir), graph(gra)
     {
         BBtoBlockPoint = new map<BasicBlock*,blockPoints*>();
         valuesToIndex  = new map<Value*,unsigned>();
@@ -53,26 +54,20 @@ IterativeFramework::~IterativeFramework()
 
     // TODO: I need more arguments here
     // For now let's just implement reaching defs to make sure it works.
- bool IterativeFramework::runIterativeFramework( bool fromTop,
-                                                 bool(*transfer)(blockPoints *bp, map<Value*,unsigned> *valuesToIndex)
+ bool IterativeFramework::runIterativeFramework(transfer_function transfer
                                         /*, meet_op, set_boundary, set_initial*/)
     {
         // need a modified blocks list for the while loop.
         bool somethingModified=true;
 
-
-
-
-
         // Initialize Boundary conditions.
         // +we want to set out[entry]
-        if(fromTop)
+        if(direction == DIRECTION_FORWARD)
         {
             setEmpty((*BBtoBlockPoint)[CFG->start]->out); //reach-def
             // but actually we do want the args
             for(Function::ArgumentListType::iterator ag=CFG->F->arg_begin(); ag != CFG->F->arg_end(); ++ag)
-                (*(*BBtoBlockPoint)[CFG->start]->out)[(*valuesToIndex)[ag]] = true;
-
+                (*BBtoBlockPoint)[CFG->start]->out[(*valuesToIndex)[ag]] = true;
         }
         else
         {
@@ -84,7 +79,7 @@ IterativeFramework::~IterativeFramework()
         //       by this functions parameters.
         //
         // Init the outs/ins for the internal nodes depending on direction.
-        if(fromTop)
+        if(direction == DIRECTION_FORWARD)
             for(list<BasicBlock*>::iterator block=CFG->vertices.begin(); block != CFG->vertices.end(); ++block)
                 setEmpty((*BBtoBlockPoint)[*block]->out);
         else
@@ -99,10 +94,10 @@ IterativeFramework::~IterativeFramework()
             for(list<BasicBlock*>::iterator block=CFG->vertices.begin(); block != CFG->vertices.end(); ++block)
             {
                 // for each BB other than entry, so including exit?
-                if(fromTop)
+                if(direction == DIRECTION_FORWARD)
                 {
                     //tmp = out[b] we want to detect changes
-                    vector<bool> tmp = *(((*BBtoBlockPoint)[*block]->out));
+                    bitvector tmp = (*BBtoBlockPoint)[*block]->out;
 
                     // We want to union all of the outs of the preds
                     // in[B] = U (out[p])
@@ -110,7 +105,7 @@ IterativeFramework::~IterativeFramework()
                         if(it->second == *block)
                         {
                             // in[b] = in[b] U (out[p])
-                            unionVect(((*BBtoBlockPoint)[*block]->in),((*BBtoBlockPoint)[it->first]->out));
+                            unionVect((*BBtoBlockPoint)[*block]->in, (*BBtoBlockPoint)[it->first]->out);
                         }
 
 
@@ -120,14 +115,14 @@ IterativeFramework::~IterativeFramework()
                     transfer((*BBtoBlockPoint)[*block], valuesToIndex);
 
                     // if tmp differs from  out then we flag a modify
-                    if(tmp!=*(((*BBtoBlockPoint)[*block]->out)))
+                    if(tmp!=((*BBtoBlockPoint)[*block]->out))
                         somethingModified = true;
 
                 }
                 else // not from top
                 {
                     //tmp = out[b] we want to detect changes
-                    vector<bool> tmp = *(((*BBtoBlockPoint)[*block]->in));
+                    bitvector tmp = (*BBtoBlockPoint)[*block]->in;
 
                     // We want to union all of the outs of the preds
                     // in[B] = U (out[p])
@@ -135,7 +130,7 @@ IterativeFramework::~IterativeFramework()
                         if(it->second == *block)
                         {
                             // in[b] = in[b] U (out[p])
-                            unionVect(((*BBtoBlockPoint)[*block]->out),((*BBtoBlockPoint)[it->first]->in));
+                            unionVect((*BBtoBlockPoint)[*block]->out, (*BBtoBlockPoint)[it->first]->in);
                         }
 
 
@@ -145,7 +140,7 @@ IterativeFramework::~IterativeFramework()
                     transfer((*BBtoBlockPoint)[*block], valuesToIndex);
 
                     // if tmp differs from  out then we flag a modify
-                    if(tmp!=*(((*BBtoBlockPoint)[*block]->in)))
+                    if(tmp != ((*BBtoBlockPoint)[*block]->in))
                         somethingModified = true;
 
                 }
@@ -216,7 +211,7 @@ IterativeFramework::~IterativeFramework()
                 if(isa<BinaryOperator>(inst) ||isa<UnaryInstruction>(inst)||isa<CmpInst>(inst)||
                     isa<TerminatorInst>(inst)||isa<StoreInst>(inst)||isa<CallInst>(inst))
                 {
-                        printValueNames(valuesToIndex, (*BBtoBlockPoint)[bl]->programPoints[inst]);
+                        printValueNames(valuesToIndex, *(*BBtoBlockPoint)[bl]->programPoints[inst]);
                         cout << endl;
                 }
 
@@ -352,11 +347,11 @@ IterativeFramework::~IterativeFramework()
         // Note: Need to initialize start and end which means I need to grab
         //       the function arguments. This changes everything because it
         //       adds more positions to the vectors.
-        start_bp->in  = NULL;
-        start_bp->out = new vector<bool>(valuesToIndex->size());
+        start_bp->in  = bitvector(valuesToIndex->size());
+        start_bp->out = bitvector(valuesToIndex->size());
 
-        end_bp->in  = new vector<bool>(valuesToIndex->size());
-        end_bp->out = NULL;
+        end_bp->in  = bitvector(valuesToIndex->size());
+        end_bp->out  = bitvector(valuesToIndex->size());
 
         // we know all of the values, now we can initializes all the vectors on the heap.
         for(list<BasicBlock*>::iterator block=CFG->vertices.begin(); block != CFG->vertices.end(); ++block)
@@ -365,12 +360,12 @@ IterativeFramework::~IterativeFramework()
             blockPoints *bp = (*BBtoBlockPoint)[bl];
 
 
-            bp->in = new vector<bool>(valuesToIndex->size());
-            bp->out = new vector<bool>(valuesToIndex->size());
+            bp->in = bitvector(valuesToIndex->size());
+            bp->out = bitvector(valuesToIndex->size());
 
-            for(map<Value*, vector<bool>*>::iterator it = bp->programPoints.begin(); it != bp->programPoints.end(); ++it)
+            for(map<Value*, bitvector*>::iterator it = bp->programPoints.begin(); it != bp->programPoints.end(); ++it)
             {
-                bp->programPoints[it->first] = new vector<bool>(valuesToIndex->size());
+                bp->programPoints[it->first] = new bitvector(valuesToIndex->size());
             }
 
             //cout << "pPS: "<< bp->programPoints.size() <<endl;
@@ -379,15 +374,15 @@ IterativeFramework::~IterativeFramework()
 
     }
 
- bool IterativeFramework::printValueNames(map<Value*,unsigned> *valuesToIndex, vector<bool> *v)
+ bool IterativeFramework::printValueNames(map<Value*,unsigned> *valuesToIndex, bitvector& v)
     {
-        vector<bool> *indexCalled = new vector<bool>(v->size());
+        bitvector *indexCalled = new bitvector(v.size());
 
         cout << "{ ";
         for(map<Value*,unsigned>::iterator it = valuesToIndex->begin(); it != valuesToIndex->end(); ++it)
         {
             //cout << "("<< it->first<<", "<<it->second<<"): ";
-            if((*v)[it->second])
+            if(v[it->second])
                 if(it->first->hasName())
                     cout << " "<<it->first->getName().data();
                 else if(!(*indexCalled)[it->second])
@@ -469,33 +464,33 @@ IterativeFramework::~IterativeFramework()
 
     // What follows are static funtions for bit manipulation on vectors.
 
-    void IterativeFramework::removeElements(vector<bool> *vr,vector<bool> *v1,vector<bool> *v2)
+    void IterativeFramework::removeElements(bitvector &vr, bitvector& v1, bitvector& v2)
     {
-        for(int i=0; i < v1->size();i++)
-            if((*v2)[i])
-                (*vr)[i]=false;
+        for(int i=0; i < v1.size();i++)
+            if(v2[i])
+                vr[i]=false;
             else
-                (*vr)[i] = (*v1)[i];
+                vr[i] = v1[i];
     }
 
-    void IterativeFramework::setEmpty(vector<bool> *v)
+    void IterativeFramework::setEmpty(bitvector& v)
     {
-        for(int i=0; i < v->size();i++)
-            (*v)[i]=false;
+        for(int i=0; i < v.size();i++)
+            v[i]=false;
     }
 
     // v1 <- v1 or v2
-    void IterativeFramework::unionVect(vector<bool> *v1,vector<bool> *v2)
+    void IterativeFramework::unionVect(bitvector& v1, bitvector& v2)
     {
-        for(int i=0; i < v1->size();i++)
-            (*v1)[i]=(*v1)[i]|(*v2)[i];
+        for(int i=0; i < v1.size();i++)
+            v1[i] = v1[i] | v2[i];
     }
 
-    void IterativeFramework::printVector(vector<bool> *v)
+    void IterativeFramework::printVector(bitvector& v)
     {
         cout << "[";
-        for(int i=0; i < v->size();i++)
-            cout << " " <<(*v)[i];
+        for(int i=0; i < v.size();i++)
+            cout << " " <<v[i];
         cout << "]" << endl;
 
     }
