@@ -27,9 +27,9 @@ using namespace llvm;
 using namespace std;
 
 
-IterativeFramework::IterativeFramework(Function &F, graph_type_t gra, direction_t dir,
+IterativeFramework::IterativeFramework(Function &F, direction_t dir,
    meet_operator_t mt, transfer_function2 tran, bitvector init):
-   fun(&F), direction(dir), graph(gra), meet(mt), transfer2(tran)
+   fun(&F), direction(dir), meet(mt), transfer2(tran)
 {
    BBtoBlockPoint = new map<BasicBlock*,blockPoints*>();
    valuesToIndex  = new map<Value*,unsigned>();
@@ -413,6 +413,8 @@ IterativeFramework::buildDataFlowGraph(Function& F, bitvector& init)
       new_blk->blk = &blk;
       new_blk->in = init;
       new_blk->out = init;
+      new_blk->first_time = true;
+      new_blk->in_queue = false;
       
       cfg2.nodes.push_back(new_blk);
       cfg2.mapping[&blk] = new_blk;
@@ -448,6 +450,15 @@ IterativeFramework::doMeetWithOperator(meet_operator_t meet, bitvector& a, bitve
    assert(false);
 }
 
+#define ADD_TO_WORKLIST(LIST, EL) \
+   do {  \
+      CustomBlock *tmp(EL); \
+      if(!tmp->in_queue) { \
+         (LIST).push(tmp); \
+         tmp->in_queue = true; \
+      }  \
+   } while(false)
+
 void
 IterativeFramework::execute(void)
 {
@@ -457,58 +468,81 @@ IterativeFramework::execute(void)
    // optimal would be: for forward direction
    // we would add the entry node
    // and for the backward direction, the exit nodes
-   typedef list<CustomBlock*>::iterator it_blocks;
-   for(it_blocks it(cfg2.nodes.begin()); it != cfg2.nodes.end(); ++it) {
-      work_list.push(*it);
+   if(direction == DIRECTION_FORWARD)
+      ADD_TO_WORKLIST(work_list, getMap(&fun->getEntryBlock()));
+   else if(direction == DIRECTION_BACKWARD) {
+      for(Function::iterator i(fun->begin()), e = fun->end(); i != e; ++i) {
+         if(isa<ReturnInst>(i->getTerminator())) {
+            ADD_TO_WORKLIST(work_list, getMap(i));
+         }
+      }
    }
    
    while(!work_list.empty()) {
       
       CustomBlock *cblk(work_list.front());
       work_list.pop();
+      cblk->in_queue = false;
       
       BasicBlock *blk(cblk->blk);
       
       if(direction == DIRECTION_FORWARD) {
          // meet all predecessors
          pred_iterator pi(pred_begin(blk));
-         bitvector new_in(getMap(*pi)->out);
          
-         pi++;
+         // may not have predecessors, ie, entry point
+         if(pi != pred_end(blk)) {
+            bitvector new_in(getMap(*pi)->out);
          
-         for(pred_iterator e = pred_end(blk); pi != e; pi++)
-            doMeetWithOperator(meet, new_in, getMap(*pi)->out);
+            pi++;
+         
+            for(pred_iterator e = pred_end(blk); pi != e; pi++)
+               doMeetWithOperator(meet, new_in, getMap(*pi)->out);
             
-         cblk->in = new_in;
+            cblk->in = new_in;
+         }
          
          bitvector new_out = transfer2(*cblk);
          
-         if(new_out != cblk->out) {
+         if(new_out != cblk->out || cblk->first_time) {
             // add all successors
             for (succ_iterator si = succ_begin(blk), e = succ_end(blk); si != e; si++)
-                 work_list.push(getMap(*si));
+                 ADD_TO_WORKLIST(work_list, getMap(*si));
+            cblk->first_time = false;
          }
       } else if(direction == DIRECTION_BACKWARD) {
          // meet all successors
          succ_iterator si(succ_begin(blk));
-         bitvector new_out(getMap(*si)->in);
          
-         si++;
+         // may not have successors, ie, exit point
+         if(si != succ_end(blk)) {
+            bitvector new_out(getMap(*si)->in);
          
-         for(succ_iterator e = succ_end(blk); si != e; si++)
-            doMeetWithOperator(meet, new_out, getMap(*si)->in);
+            si++;
+         
+            for(succ_iterator e = succ_end(blk); si != e; si++)
+               doMeetWithOperator(meet, new_out, getMap(*si)->in);
             
-         cblk->out = new_out;
-            
+            cblk->out = new_out;
+         }
+         
          bitvector new_in = transfer2(*cblk);
          
-         if(new_in != cblk->in) {
+         if(new_in != cblk->in || cblk->first_time) {
             // add all successors
             for(pred_iterator pi = pred_begin(blk), e = pred_end(blk); pi != e; pi++)
-               work_list.push(getMap(*pi));
+               ADD_TO_WORKLIST(work_list, getMap(*pi));
+            cblk->first_time = false;
          }
       } else
          assert(false);
+   }
+   
+   // do sanity checks
+   for(list<CustomBlock*>::iterator it(cfg2.nodes.begin()), e(cfg2.nodes.end()); it != e; ++it) {
+      CustomBlock *cblk(*it);
+      assert(!cblk->first_time); // must have run through all the blocks
+      assert(!cblk->in_queue); // blocks must not be in the queue since it's now empty
    }
 }
 

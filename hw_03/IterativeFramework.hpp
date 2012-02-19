@@ -15,6 +15,9 @@ struct CustomBlock {
 
    bitvector in;
    bitvector out;
+   
+   bool first_time;
+   bool in_queue;
 };
 
 typedef map<BasicBlock*, CustomBlock*> mapping_map;
@@ -60,11 +63,6 @@ public:
       DIRECTION_FORWARD,
       DIRECTION_BACKWARD
    } direction_t;
-
-   typedef enum {
-      BLOCK_BLOCK,
-      BLOCK_INSTRUCTION
-   } graph_type_t;
    
    typedef enum {
       MEET_UNION,
@@ -74,7 +72,7 @@ public:
    typedef bitvector (*transfer_function2)(CustomBlock&);
    typedef bool (*transfer_function)(blockPoints *, map<Value*, unsigned> *);
 
-	IterativeFramework(Function&, graph_type_t, direction_t, meet_operator_t, transfer_function2, bitvector);
+	IterativeFramework(Function&, direction_t, meet_operator_t, transfer_function2, bitvector);
 	~IterativeFramework();
 
    void execute(void);
@@ -96,7 +94,6 @@ private:
     Function::BasicBlockListType::iterator endBlock;
     Function::BasicBlockListType::iterator beginBlock;
     direction_t direction;
-    graph_type_t graph;
     meet_operator_t meet;
     transfer_function transfer;
     transfer_function2 transfer2;
