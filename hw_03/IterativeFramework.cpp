@@ -12,8 +12,10 @@
 #include "llvm/User.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/CFG.h"
 
 
+#include <queue>
 #include <iostream>
 #include <list>
 #include <map>
@@ -25,20 +27,21 @@ using namespace llvm;
 using namespace std;
 
 
-IterativeFramework::IterativeFramework(Function &F, graph_type_t gra, direction_t dir):
-   direction(dir), graph(gra)
-    {
-        BBtoBlockPoint = new map<BasicBlock*,blockPoints*>();
-        valuesToIndex  = new map<Value*,unsigned>();
-        CFG = new cfg;
+IterativeFramework::IterativeFramework(Function &F, graph_type_t gra, direction_t dir,
+   meet_operator_t mt, transfer_function2 tran, bitvector init):
+   fun(&F), direction(dir), graph(gra), meet(mt), transfer2(tran)
+{
+   BBtoBlockPoint = new map<BasicBlock*,blockPoints*>();
+   valuesToIndex  = new map<Value*,unsigned>();
+   CFG = new cfg;
 
-        beginBlock = F.begin();
-        endBlock   = F.end();
+   beginBlock = F.begin();
+   endBlock   = F.end();
 
-        buildCFG(F);
-        buildBlockPointMap(CFG,BBtoBlockPoint ,valuesToIndex);
-
-	}
+   buildCFG(F);
+   buildBlockPointMap(CFG,BBtoBlockPoint ,valuesToIndex);
+   buildDataFlowGraph(F, init);
+}
 
 IterativeFramework::~IterativeFramework()
 	{
@@ -395,102 +398,234 @@ IterativeFramework::~IterativeFramework()
     }
 
 
-    // Here we are trying to build the CFG of our program.
-     bool IterativeFramework::buildCFG(Function &F)
-    {
-
-        map<BlockAddress*,BasicBlock*> block_addr_to_block;
-
-        CFG->start =  BasicBlock::Create(F.getContext(),"start",NULL);
-        CFG->end   =  BasicBlock::Create(F.getContext(),"end",NULL);
-
-        // WARNING: This may be on the stack.
-        // We want to keep the function in the CFG just so we can grab the arguments.
-        CFG->F = &F;
-
-        // Function > GlobalValue > Value
-        string name(F.getName().data());
-
-        // First let us build the map of BasicBlocks, and the vertex list.
-        for(Function::BasicBlockListType::iterator bl=F.begin(); bl != F.end(); ++bl)
-        {
-            BlockAddress *ba = BlockAddress::get(bl);
-            block_addr_to_block[ba]=bl;
-            // WARNING: where is this list being created. The heap, right?
-            CFG->vertices.push_back(bl);
+void
+IterativeFramework::buildDataFlowGraph(Function& F, bitvector& init)
+{
+   typedef Function::BasicBlockListType::iterator block_iter;
+   
+   block_iter it(F.begin());
+   block_iter end(F.end());
+   
+   for(; it != end; ++it) {
+      BasicBlock& blk(*it);
+      CustomBlock *new_blk(new CustomBlock);
+      
+      new_blk->blk = &blk;
+      new_blk->in = init;
+      new_blk->out = init;
+      
+      cfg2.nodes.push_back(new_blk);
+      cfg2.mapping[&blk] = new_blk;
+#if 0
+      for (pred_iterator PI = pred_begin(&blk), E = pred_end(&blk); PI != E; ++PI) {
+           BasicBlock *OnePredecessor = *PI;
         }
+#endif
+   }
+}
+
+CustomBlock *
+IterativeFramework::getMap(BasicBlock *blk)
+{
+   mapping_map::iterator f(cfg2.mapping.find(blk));
+   assert(f != cfg2.mapping.end());
+   
+   return f->second;
+}
+
+bitvector
+IterativeFramework::doMeetWithOperator(meet_operator_t meet, bitvector& a, bitvector& b)
+{
+   switch(meet) {
+      case MEET_UNION:
+         return unionVect(a, b);
+      case MEET_INTERSECTION:
+         return intersectVect(a, b);
+      default:
+         assert(false);
+   }
+   
+   assert(false);
+}
+
+void
+IterativeFramework::execute(void)
+{
+   queue<CustomBlock*> work_list;
+   
+   // add everything for now.
+   // optimal would be: for forward direction
+   // we would add the entry node
+   // and for the backward direction, the exit nodes
+   typedef list<CustomBlock*>::iterator it_blocks;
+   for(it_blocks it(cfg2.nodes.begin()); it != cfg2.nodes.end(); ++it) {
+      work_list.push(*it);
+   }
+   
+   while(!work_list.empty()) {
+      
+      CustomBlock *cblk(work_list.front());
+      work_list.pop();
+      
+      BasicBlock *blk(cblk->blk);
+      
+      if(direction == DIRECTION_FORWARD) {
+         // meet all predecessors
+         pred_iterator pi(pred_begin(blk));
+         bitvector new_in(getMap(*pi)->out);
+         
+         pi++;
+         
+         for(pred_iterator e = pred_end(blk); pi != e; pi++)
+            doMeetWithOperator(meet, new_in, getMap(*pi)->out);
+            
+         cblk->in = new_in;
+         
+         bitvector new_out = transfer2(*cblk);
+         
+         if(new_out != cblk->out) {
+            // add all successors
+            for (succ_iterator si = succ_begin(blk), e = succ_end(blk); si != e; si++)
+                 work_list.push(getMap(*si));
+         }
+      } else if(direction == DIRECTION_BACKWARD) {
+         // meet all successors
+         succ_iterator si(succ_begin(blk));
+         bitvector new_out(getMap(*si)->in);
+         
+         si++;
+         
+         for(succ_iterator e = succ_end(blk); si != e; si++)
+            doMeetWithOperator(meet, new_out, getMap(*si)->in);
+            
+         cblk->out = new_out;
+            
+         bitvector new_in = transfer2(*cblk);
+         
+         if(new_in != cblk->in) {
+            // add all successors
+            for(pred_iterator pi = pred_begin(blk), e = pred_end(blk); pi != e; pi++)
+               work_list.push(getMap(*pi));
+         }
+      } else
+         assert(false);
+   }
+}
+
+// Here we are trying to build the CFG of our program.
+bool IterativeFramework::buildCFG(Function &F)
+{
+  map<BlockAddress*,BasicBlock*> block_addr_to_block;
+
+  CFG->start =  BasicBlock::Create(F.getContext(),"start",NULL);
+  CFG->end   =  BasicBlock::Create(F.getContext(),"end",NULL);
+
+  // WARNING: This may be on the stack.
+  // We want to keep the function in the CFG just so we can grab the arguments.
+  CFG->F = &F;
+
+  // Function > GlobalValue > Value
+  string name(F.getName().data());
+
+  // First let us build the map of BasicBlocks, and the vertex list.
+  for(Function::BasicBlockListType::iterator bl=F.begin(); bl != F.end(); ++bl)
+  {
+      BlockAddress *ba = BlockAddress::get(bl);
+      block_addr_to_block[ba]=bl;
+      // WARNING: where is this list being created. The heap, right?
+      CFG->vertices.push_back(bl);
+  }
+
+  for(Function::BasicBlockListType::iterator bl=F.begin(); bl != F.end(); ++bl)
+  {
+      BlockAddress *ba = BlockAddress::get(bl);
+      TerminatorInst *t = bl-> getTerminator();
+      unsigned num = t->getNumSuccessors();
+
+      if(bl== F.begin())
+      {
+          pair<BasicBlock*, BasicBlock* > p = pair<BasicBlock*, BasicBlock* >(CFG->start,bl);
+          CFG->bb_edges.insert(p);
+      }
+
+      if(num == 0)
+      {
+          pair<BasicBlock*, BasicBlock* > p = pair<BasicBlock*, BasicBlock* >(bl,CFG->end);
+          CFG->bb_edges.insert(p);
+      }
+      else
+      {
+          for(int i = 0; i < num; i++)
+          {
+              BasicBlock *term_bb     = t->getSuccessor(i);
+              BlockAddress *term_addr = BlockAddress::get(term_bb);
+
+              pair<BasicBlock*, BasicBlock* > p =
+                  pair<BasicBlock*, BasicBlock* >(bl,block_addr_to_block[term_addr]);
+
+              CFG->bb_edges.insert(p);
+          }
+      }
+  }
+
+  return false;
+}
 
 
-        for(Function::BasicBlockListType::iterator bl=F.begin(); bl != F.end(); ++bl)
-        {
-            BlockAddress *ba = BlockAddress::get(bl);
-            TerminatorInst *t = bl-> getTerminator();
-            unsigned num = t->getNumSuccessors();
 
+// What follows are static funtions for bit manipulation on vectors.
 
-            if(bl== F.begin())
-            {
-                pair<BasicBlock*, BasicBlock* > p = pair<BasicBlock*, BasicBlock* >(CFG->start,bl);
-                CFG->bb_edges.insert(p);
-            }
+void
+IterativeFramework::removeElements(bitvector &vr, bitvector& v1, bitvector& v2)
+{
+   for(int i=0; i < v1.size();i++)
+      if(v2[i])
+      vr[i]=false;
+   else
+      vr[i] = v1[i];
+}
 
-            if(num == 0)
-            {
-                pair<BasicBlock*, BasicBlock* > p = pair<BasicBlock*, BasicBlock* >(bl,CFG->end);
-                CFG->bb_edges.insert(p);
+void
+IterativeFramework::setEmpty(bitvector& v)
+{
+   for(int i=0; i < v.size();i++)
+    v[i]=false;
+}
 
-            }
-            else
-            {
-                for(int i = 0; i < num; i++)
-                {
-                    BasicBlock *term_bb     = t->getSuccessor(i);
-                    BlockAddress *term_addr = BlockAddress::get(term_bb);
+bitvector
+unionVect(bitvector& a, bitvector& b)
+{
+   size_t num(a.size());
 
-                    pair<BasicBlock*, BasicBlock* > p =
-                        pair<BasicBlock*, BasicBlock* >(bl,block_addr_to_block[term_addr]);
+   assert(a.size() == b.size());
 
-                    CFG->bb_edges.insert(p);
+   bitvector ret(num, false);
 
-                }
-            }
+   for(size_t i(0); i < num; i++)
+      ret[i] = a[i] || b[i];
 
-        }
+   return ret;
+}
 
-        return false;
-    }
+bitvector
+IterativeFramework::intersectVect(bitvector& a, bitvector& b)
+{
+   size_t num(a.size());
+   
+   assert(a.size() == b.size());
+   
+   bitvector ret(num, false);
+   
+   for(size_t i(0); i < num; i++)
+      ret[i] = a[i] && b[i];
+   
+   return ret;
+}
 
-
-
-    // What follows are static funtions for bit manipulation on vectors.
-
-    void IterativeFramework::removeElements(bitvector &vr, bitvector& v1, bitvector& v2)
-    {
-        for(int i=0; i < v1.size();i++)
-            if(v2[i])
-                vr[i]=false;
-            else
-                vr[i] = v1[i];
-    }
-
-    void IterativeFramework::setEmpty(bitvector& v)
-    {
-        for(int i=0; i < v.size();i++)
-            v[i]=false;
-    }
-
-    // v1 <- v1 or v2
-    void IterativeFramework::unionVect(bitvector& v1, bitvector& v2)
-    {
-        for(int i=0; i < v1.size();i++)
-            v1[i] = v1[i] | v2[i];
-    }
-
-    void IterativeFramework::printVector(bitvector& v)
-    {
-        cout << "[";
-        for(int i=0; i < v.size();i++)
-            cout << " " <<v[i];
-        cout << "]" << endl;
-
-    }
+void IterativeFramework::printVector(bitvector& v)
+{
+   cout << "[";
+   for(int i=0; i < v.size();i++)
+      cout << " " <<v[i];
+   cout << "]" << endl;
+}

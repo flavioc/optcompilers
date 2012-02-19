@@ -10,6 +10,23 @@ using namespace std;
 
 typedef std::vector<bool> bitvector;
 
+struct CustomBlock {
+   BasicBlock *blk;
+
+   bitvector in;
+   bitvector out;
+};
+
+typedef map<BasicBlock*, CustomBlock*> mapping_map;
+
+struct DataFlowGraph {
+   list<CustomBlock*> nodes;
+   multimap<CustomBlock *, CustomBlock *> edges;
+   mapping_map mapping;
+   CustomBlock *start;
+   CustomBlock *end;
+};
+
 struct cfg {
     list<BasicBlock*> vertices;
     multimap<BasicBlock*, BasicBlock* > bb_edges;
@@ -35,9 +52,6 @@ struct blockPoints {
     map<Value*, bitvector*> programPoints;
 };
 
-//namespace  IterativeFramework
-//{
-
 class IterativeFramework
 {
 public:
@@ -51,26 +65,31 @@ public:
       BLOCK_BLOCK,
       BLOCK_INSTRUCTION
    } graph_type_t;
+   
+   typedef enum {
+      MEET_UNION,
+      MEET_INTERSECTION
+   } meet_operator_t;
 
+   typedef bitvector (*transfer_function2)(CustomBlock&);
    typedef bool (*transfer_function)(blockPoints *, map<Value*, unsigned> *);
 
-	IterativeFramework(Function &F, graph_type_t type, direction_t dir);
+	IterativeFramework(Function&, graph_type_t, direction_t, meet_operator_t, transfer_function2, bitvector);
 	~IterativeFramework();
 
+   void execute(void);
+   
     virtual bool runIterativeFramework(transfer_function transfer /*, meet_op, set_boundary, set_initial*/);
 
     virtual bool printProgramPoints();
 
-
     virtual bool printCFG();
-
-    static void printVector(bitvector &);
-    static void unionVect(bitvector&, bitvector&);
-    static void setEmpty(bitvector&);
-    static void removeElements(bitvector&, bitvector&, bitvector&);
 
 
 private:
+
+    Function *fun;
+    DataFlowGraph cfg2;
     cfg *CFG;
     map<BasicBlock*,blockPoints*> *BBtoBlockPoint;
     map<Value*,unsigned> *valuesToIndex;
@@ -78,6 +97,9 @@ private:
     Function::BasicBlockListType::iterator beginBlock;
     direction_t direction;
     graph_type_t graph;
+    meet_operator_t meet;
+    transfer_function transfer;
+    transfer_function2 transfer2;
 
     // This function takes in a pointer to a CFG and a pointer to an empty block map and
     // contstructs the mapping of basicblocks to blockpoints.
@@ -91,6 +113,16 @@ private:
     virtual bool printValueNames(map<Value*,unsigned> *valuesToIndex, bitvector&);
     virtual bool buildCFG(Function &F);    // Here we are trying to build the CFG of our program.
 
+    void buildDataFlowGraph(Function &, bitvector&);
+    CustomBlock *getMap(BasicBlock *);
+    
+    static bitvector doMeetWithOperator(meet_operator_t, bitvector&, bitvector&);
+    
+    static void printVector(bitvector&);
+    static bitvector unionVect(bitvector&, bitvector&);
+    static bitvector intersectVect(bitvector&, bitvector&);
+    static void setEmpty(bitvector&);
+    static void removeElements(bitvector&, bitvector&, bitvector&);
 };
 
 //}
