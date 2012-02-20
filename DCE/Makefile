@@ -14,15 +14,30 @@ $(FILE).so: $(FILE).o IterativeFramework.o Variables.o
 	$(CXX) $(CXXFLAGS) -shared -fPIC $^ -o $@
 
 clean:
-	rm -f *.o *~ *.so *.finfo *.out
+	rm -f *.o *~ *.so *.finfo *.out *.opt.o *.opt *.s *.ll
 
 TEST = opt -load $(FILE).so -dce-pass
 
-load:
-	$(TEST) faint.o -o faint.out
+clean-examples:
+	rm -f *.opt *.unopt *.opt.o *.unopt.o
+
+load: faint.opt faint.unopt if.opt if.unopt simple.opt simple.unopt
+
+%.opt.o: %.o
+	$(TEST) $^ -o $@
+
+%.opt: %.opt.o
+	llc $^ -o $@.s
+	clang $@.s -o $@
+
+%.unopt: %.o
+	llc $^ -o $@.s
+	clang $@.s -o $@
 
 LLVM = clang -emit-llvm -c -O0
 
 compile:
 	$(LLVM) faint.c
 	$(LLVM) simple.c
+	$(LLVM) if.c
+	$(LLVM) coiso.c
