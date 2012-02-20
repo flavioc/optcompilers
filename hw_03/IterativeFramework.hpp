@@ -76,6 +76,7 @@ public:
 	~IterativeFramework();
 
    void execute(void);
+   bitvector getInEntry(void) const;
    
     virtual bool runIterativeFramework(transfer_function transfer /*, meet_op, set_boundary, set_initial*/);
 
@@ -112,6 +113,7 @@ private:
 
     void buildDataFlowGraph(Function &, bitvector&);
     CustomBlock *getMap(BasicBlock *);
+    const CustomBlock *getMap(BasicBlock *) const;
     
     static bitvector doMeetWithOperator(meet_operator_t, bitvector&, bitvector&);
     

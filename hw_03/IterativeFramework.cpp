@@ -418,11 +418,6 @@ IterativeFramework::buildDataFlowGraph(Function& F, bitvector& init)
       
       cfg2.nodes.push_back(new_blk);
       cfg2.mapping[&blk] = new_blk;
-#if 0
-      for (pred_iterator PI = pred_begin(&blk), E = pred_end(&blk); PI != E; ++PI) {
-           BasicBlock *OnePredecessor = *PI;
-        }
-#endif
    }
 }
 
@@ -430,6 +425,15 @@ CustomBlock *
 IterativeFramework::getMap(BasicBlock *blk)
 {
    mapping_map::iterator f(cfg2.mapping.find(blk));
+   assert(f != cfg2.mapping.end());
+   
+   return f->second;
+}
+
+const CustomBlock *
+IterativeFramework::getMap(BasicBlock *blk) const
+{
+   mapping_map::const_iterator f(cfg2.mapping.find(blk));
    assert(f != cfg2.mapping.end());
    
    return f->second;
@@ -497,7 +501,7 @@ IterativeFramework::execute(void)
             pi++;
          
             for(pred_iterator e = pred_end(blk); pi != e; pi++)
-               doMeetWithOperator(meet, new_in, getMap(*pi)->out);
+               new_in = doMeetWithOperator(meet, new_in, getMap(*pi)->out);
             
             cblk->in = new_in;
          }
@@ -506,6 +510,7 @@ IterativeFramework::execute(void)
          
          if(new_out != cblk->out || cblk->first_time) {
             // add all successors
+            cblk->out = new_out;
             for (succ_iterator si = succ_begin(blk), e = succ_end(blk); si != e; si++)
                  ADD_TO_WORKLIST(work_list, getMap(*si));
             cblk->first_time = false;
@@ -517,11 +522,12 @@ IterativeFramework::execute(void)
          // may not have successors, ie, exit point
          if(si != succ_end(blk)) {
             bitvector new_out(getMap(*si)->in);
-         
+            int total(1);
             si++;
          
-            for(succ_iterator e = succ_end(blk); si != e; si++)
-               doMeetWithOperator(meet, new_out, getMap(*si)->in);
+            // fold INs into new OUT
+            for(succ_iterator e = succ_end(blk); si != e; si++, total++)
+               new_out = doMeetWithOperator(meet, new_out, getMap(*si)->in);
             
             cblk->out = new_out;
          }
@@ -530,8 +536,11 @@ IterativeFramework::execute(void)
          
          if(new_in != cblk->in || cblk->first_time) {
             // add all successors
-            for(pred_iterator pi = pred_begin(blk), e = pred_end(blk); pi != e; pi++)
+            cblk->in = new_in;
+            int total(0);
+            for(pred_iterator pi = pred_begin(blk), e = pred_end(blk); pi != e; pi++, total++)
                ADD_TO_WORKLIST(work_list, getMap(*pi));
+            cout << total << " predecessors\n";
             cblk->first_time = false;
          }
       } else
@@ -544,6 +553,18 @@ IterativeFramework::execute(void)
       assert(!cblk->first_time); // must have run through all the blocks
       assert(!cblk->in_queue); // blocks must not be in the queue since it's now empty
    }
+}
+
+bitvector
+IterativeFramework::getInEntry(void) const
+{
+   if(fun->empty())
+      return bitvector(); // return empty...
+      
+   BasicBlock& blk(fun->getEntryBlock());
+   
+   const CustomBlock *cblk(getMap(&blk));
+   return cblk->in;
 }
 
 // Here we are trying to build the CFG of our program.

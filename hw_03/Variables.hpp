@@ -14,11 +14,14 @@ class Variables
 private:
    
    typedef std::map<std::string, size_t> var_vector;
+   typedef std::vector<std::string> var_names;
    
    var_vector vars;
+   var_names names;
    
    void giveInstructionsNames(llvm::Function&);
    void buildVarsVector(llvm::Function&);
+   void addVariable(const std::string&);
    
 public:
    
@@ -27,6 +30,7 @@ public:
    bitvector getUniversalSet(void) const;
    bitvector getEmptySet(void) const;
    size_t getVarIndex(const std::string&) const;
+   std::string getVarName(const size_t) const;
    void printVars(void) const;
    
    explicit Variables(llvm::Function&);
