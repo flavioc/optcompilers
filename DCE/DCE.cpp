@@ -162,10 +162,23 @@ public:
               if(!isa<Constant>(cond))
                  MARK_NOT_FAINT(cond);
            }
+        } else if(isa<PHINode>(i)) {
+           PHINode *node((PHINode*)&i);
+
+           // x = [x1, x2, x3..]
+           // if x is not faint, then xi is not faint
+           if(!IS_VALUE_FAINT(node)) {
+              for(size_t val(0); val < node->getNumIncomingValues(); val++) {
+                 Value *value(node->getIncomingValue(val));
+                 if(!isa<Constant>(value)) {
+                    MARK_NOT_FAINT(value);
+                 }
+              }
+           }
         } else {
            cout << "WARNING!!! THIS INSTRUCTION IS NOT SUPPORTED\n";
-           assert(false);
            i.dump();
+           assert(false);
         }
      }
      
@@ -252,6 +265,9 @@ public:
                if(VALUE_IS_FAINT(&i))
                   DELETE_INSTR("call", i);
            }
+        } else if(isa<PHINode>(i)) {
+           if(VALUE_IS_FAINT(&i))
+              DELETE_INSTR("phi", i);
         } else {
            cout << "DONT KNOW HOW TO DELETE THIS INSTRUCTION\n";
            i.dump();
@@ -285,8 +301,7 @@ public:
         }
      }
 
-     cout << fun.size() << endl;
-
+     // list of instructions to delete later
      queue<Instruction*> to_delete;
 
      while (!work_list.empty()) {
