@@ -107,7 +107,9 @@ public:
            ReturnInst *r((ReturnInst*)&i);
            Value *ret(r->getReturnValue());
            
-           if(!isa<Constant>(ret)) {
+           // if return is void ret == NULL
+           
+           if(ret != NULL && !isa<Constant>(ret)) {
               // case: return x
               MARK_NOT_FAINT(ret);
            }
@@ -162,6 +164,13 @@ public:
               if(!isa<Constant>(cond))
                  MARK_NOT_FAINT(cond);
            }
+        } else if(isa<SwitchInst>(i)) {
+           SwitchInst *s((SwitchInst*)&i);
+           
+           Value *cond(s->getCondition());
+           
+           if(!isa<Constant>(cond))
+              MARK_NOT_FAINT(cond);
         } else if(isa<PHINode>(i)) {
            PHINode *node((PHINode*)&i);
 
@@ -174,6 +183,14 @@ public:
                     MARK_NOT_FAINT(value);
                  }
               }
+           }
+        } else if(isa<CastInst>(i)) {
+           CastInst *c((CastInst*)&i);
+           
+           if(!IS_VALUE_FAINT(c)) {
+              Value *oper(c->getOperand(0));
+              
+              MARK_NOT_FAINT(oper);
            }
         } else {
            cout << "WARNING!!! THIS INSTRUCTION IS NOT SUPPORTED\n";
@@ -242,7 +259,7 @@ public:
         } else if(isa<ReturnInst>(i)) {
            ReturnInst *r((ReturnInst*)&i);
              Value *ret(r->getReturnValue());
-             if(!isa<Constant>(ret) && VALUE_IS_FAINT(ret)) {
+             if(ret != NULL && !isa<Constant>(ret) && VALUE_IS_FAINT(ret)) {
                 DELETE_INSTR("ret", i);
              }
         } else if(isa<CmpInst>(i)) {
@@ -265,9 +282,14 @@ public:
                if(VALUE_IS_FAINT(&i))
                   DELETE_INSTR("call", i);
            }
+        } else if(isa<SwitchInst>(i)) {
+           // do nothing
         } else if(isa<PHINode>(i)) {
            if(VALUE_IS_FAINT(&i))
               DELETE_INSTR("phi", i);
+        } else if(isa<CastInst>(i)) {
+           if(VALUE_IS_FAINT(&i))
+              DELETE_INSTR("cast", i);
         } else {
            cout << "DONT KNOW HOW TO DELETE THIS INSTRUCTION\n";
            i.dump();
@@ -284,10 +306,8 @@ public:
      set_faint faint;
 
      for(size_t i(0); i < in.size(); ++i) {
-        if(in[i]) {
+        if(in[i])
            faint.insert(vars.getVarName(i));
-           //cout << vars.getVarName(i) << " is faint\n";
-        }
      }
 
      queue<BasicBlock*> work_list;

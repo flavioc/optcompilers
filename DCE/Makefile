@@ -21,8 +21,11 @@ TEST = opt -load $(FILE).so -dce-pass
 clean-examples:
 	rm -f *.opt *.unopt *.opt.o *.unopt.o
 
-load: faint.opt faint.unopt if.opt if.unopt simple.opt simple.unopt \
-		for-fi.opt for-fi.unopt
+load: cast.opt cast.unopt
+#unreachable.opt unreachable.unopt
+#switch.opt switch.unopt
+#faint.opt faint.unopt if.opt if.unopt simple.opt simple.unopt \
+#for-fi.opt for-fi.unopt
 
 %.opt.o: %.o
 	$(TEST) $^ -o $@
@@ -42,3 +45,6 @@ compile:
 	$(LLVM) simple.c
 	$(LLVM) if.c
 	$(LLVM) coiso.c
+	$(LLVM) switch.c
+	$(LLVM) unreachable.c
+	$(LLVM) cast.c
