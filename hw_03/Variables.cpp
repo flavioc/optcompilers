@@ -84,6 +84,11 @@ Variables::addVariable(const string& name)
 void
 Variables::buildVarsVector(Function& F)
 {
+   for (Function::arg_iterator AI = F.arg_begin(), AE = F.arg_end();
+            AI != AE; ++AI)
+      if (!AI->getType()->isVoidTy())
+         addVariable(AI->getName());
+
    for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB) {
       for (BasicBlock::iterator I = BB->begin(), E = BB->end(); I != E; ++I) {
          assert(I->hasName() || I->getType()->isVoidTy());
