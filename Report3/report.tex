@@ -1,0 +1,65 @@
+\documentclass[12pt]{article}
+
+
+\author{Fl\'{a}vio Cruz and Richard Veras}
+\title{Assignment 3}
+
+\usepackage{amsmath}
+\usepackage{amsfonts}   % if you want the fonts
+\usepackage{amssymb}    % if you want extra symbols
+%\usepackage{savetrees}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{listings}
+
+
+\begin{document}
+\maketitle
+
+\section{Dead Code Elimination}
+
+\begin{itemize}
+   \item Direction: Backwards
+   \item Meet operator: Intersection.
+   \item Lattice elements: Variables defined in the module (true values are faint variables).
+   \item Top value: Empty set.
+   \item Bottom value: All variables in the module.
+   \item Initialization: Using the bottom value (all variables).
+   \item Transfer function: $F(x) = X - (ReturnsPrintsControl \cup Assignments(X))$, where $ReturnsPrintsControl$ are variables used in control structures, function calls and returns and $Assignments(X)$ are variables that are used at the right side of assignments of non-faint variables.
+\end{itemize}
+
+\subsection{Implementation}
+
+The implementation is very straightforward and follows what was described previously.
+We use the \texttt{Variables} class to name all our variables and to generate the universal set (it is also helpful for debugging purposes). For the transfer function, we go over each instruction in a block and apply the required action for each instruction.
+For example, for a \texttt{load} instruction, we check if the left hand side is not faint, and, if that's the case, we turn the variable in the right hand side into a non-faint variable. When branches or function calls appear we simply make all the variables involved as non-faint, because something important may be done inside that function and we don't want to delete function calls at all.
+
+An important implementation detail is how we handle arrays. Problems arise when something is stored into the array and the array itself may be used elsewhere (for example, for branches). When some element of the array is changed, a \texttt{store} instruction is used but the value is not propagated, which turns such instruction values as faint and thus can destroy the correctness of the program. In the transfer function, we run a backwards pass over the list of instructions and store to \texttt{arrays} the values of the arrays that are considered non-faint. Then, we turn non-faint \texttt{getelementptr} instructions and corresponding
+stores for such arrays into non-faint and finally, we run a final backwards pass to force all the intermediate instructions and values to be marked as non-faint.
+
+Once all the faint variables have been located, we do traverse all the instructions and add those that are deemed for deletion into a queue. Finally, we just go over the queue and delete all the instructions.
+
+\subsection{Experimental Results}
+
+For all the programs below, we used an unoptimized version, an optimized version using our pass and an optimized version using LLVM dce pass. We executed the programs 3 times and then we used the average execution time. Times are in milliseconds.
+
+We used three different programs:
+
+\begin{itemize}
+   \item faint.c: the original with some alterations (more loops).
+   \item multiple.c: same as faint.c, but uses many array instructions.
+   \item float.c: same as faint.c, but uses floating point operations.
+\end{itemize}
+
+\begin{center}
+    \begin{tabular}{ | l | l | l | l | l |}
+    \hline
+    Program & Our DCE & LLVM DCE & Unoptimized & Speedup over unoptimized \\ \hline
+    faint.c & 304 & 405 & 407 & 1.34 \\ \hline
+    multiple.c & 531 & 580 & 583 & 1.10 \\ \hline
+    float.c & 586 & 904 & 890 & 1.52 \\ \hline
+    \hline
+    \end{tabular}
+\end{center}
+
+\end{document}
