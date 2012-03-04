@@ -540,7 +540,6 @@ IterativeFramework::execute(void)
             int total(0);
             for(pred_iterator pi = pred_begin(blk), e = pred_end(blk); pi != e; pi++, total++)
                ADD_TO_WORKLIST(work_list, getMap(*pi));
-            cout << total << " predecessors\n";
             cblk->first_time = false;
          }
       } else
