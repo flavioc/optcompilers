@@ -1,17 +1,33 @@
+# Note: we need to include the Variables* and IterativeFramework* files.
+
+# This variable is dependent on the system
+# flavio's dir
+#LLVM_DIR=$(HOME)/new-llvm
+#
+# Richard's dir
+LLVM_DIR=$(HOME)/WORKING/builds/current/llvm
+
+
+# Flavio's system
+#CXXFLAGS = $(shell $(LLVM_DIR)/bin/llvm-config --cxxflags all) -g
+#LIBFLAGS= -undefined suppress -dylib -flat_namespace
+
+# Richard's System
+CXXFLAGS = -rdynamic $(shell $(LLVM_DIR)/bin/llvm-config --cxxflags all) -g
+#LIBFLAGS= -dylib -flat_namespace
+
 
 CXX = g++
-CXXFLAGS = $(shell $(HOME)/new-llvm/bin/llvm-config --cxxflags all) -g
-#CXXFLAGS = -rdynamic $(shell $(HOME)/WORKING/builds/current/llvm/bin/llvm-config --cxxflags all) -g
 
 FILE = DCE
 
 all: $(FILE).so
 
 $(FILE).so: $(FILE).o IterativeFramework.o Variables.o
-	g++ -dylib -undefined suppress -flat_namespace $^ -o $(FILE).so
+	g++ $(LIBFLAGS) $^ -o $(FILE).so
 
-%.so: %.o
-	$(CXX) $(CXXFLAGS) -shared -fPIC $^ -o $@
+#%.so: %.o
+#	$(CXX) $(CXXFLAGS) -shared -fPIC $^ -o $@
 
 clean:
 	rm -f *.o *~ *.so *.finfo *.out *.opt.o *.opt *.s *.ll

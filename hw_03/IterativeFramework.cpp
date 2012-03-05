@@ -319,7 +319,6 @@ IterativeFramework::~IterativeFramework()
                 // we just spit out everything else.
                 else
                 {
-                    cout << "\tHRM"<< inst->getOpcodeName();
                 }
 
                 for(User::op_iterator oi= inst->op_begin(), oe= inst->op_end(); oi!=oe ;++oi)
@@ -402,20 +401,20 @@ void
 IterativeFramework::buildDataFlowGraph(Function& F, bitvector& init)
 {
    typedef Function::BasicBlockListType::iterator block_iter;
-   
+
    block_iter it(F.begin());
    block_iter end(F.end());
-   
+
    for(; it != end; ++it) {
       BasicBlock& blk(*it);
       CustomBlock *new_blk(new CustomBlock);
-      
+
       new_blk->blk = &blk;
       new_blk->in = init;
       new_blk->out = init;
       new_blk->first_time = true;
       new_blk->in_queue = false;
-      
+
       cfg2.nodes.push_back(new_blk);
       cfg2.mapping[&blk] = new_blk;
    }
@@ -426,7 +425,7 @@ IterativeFramework::getMap(BasicBlock *blk)
 {
    mapping_map::iterator f(cfg2.mapping.find(blk));
    assert(f != cfg2.mapping.end());
-   
+
    return f->second;
 }
 
@@ -435,7 +434,7 @@ IterativeFramework::getMap(BasicBlock *blk) const
 {
    mapping_map::const_iterator f(cfg2.mapping.find(blk));
    assert(f != cfg2.mapping.end());
-   
+
    return f->second;
 }
 
@@ -450,7 +449,7 @@ IterativeFramework::doMeetWithOperator(meet_operator_t meet, bitvector& a, bitve
       default:
          assert(false);
    }
-   
+
    assert(false);
 }
 
@@ -467,7 +466,7 @@ void
 IterativeFramework::execute(void)
 {
    queue<CustomBlock*> work_list;
-   
+
    // add everything for now.
    // optimal would be: for forward direction
    // we would add the entry node
@@ -481,33 +480,33 @@ IterativeFramework::execute(void)
          }
       }
    }
-   
+
    while(!work_list.empty()) {
-      
+
       CustomBlock *cblk(work_list.front());
       work_list.pop();
       cblk->in_queue = false;
-      
+
       BasicBlock *blk(cblk->blk);
-      
+
       if(direction == DIRECTION_FORWARD) {
          // meet all predecessors
          pred_iterator pi(pred_begin(blk));
-         
+
          // may not have predecessors, ie, entry point
          if(pi != pred_end(blk)) {
             bitvector new_in(getMap(*pi)->out);
-         
+
             pi++;
-         
+
             for(pred_iterator e = pred_end(blk); pi != e; pi++)
                new_in = doMeetWithOperator(meet, new_in, getMap(*pi)->out);
-            
+
             cblk->in = new_in;
          }
-         
+
          bitvector new_out = transfer2(*cblk);
-         
+
          if(new_out != cblk->out || cblk->first_time) {
             // add all successors
             cblk->out = new_out;
@@ -518,22 +517,22 @@ IterativeFramework::execute(void)
       } else if(direction == DIRECTION_BACKWARD) {
          // meet all successors
          succ_iterator si(succ_begin(blk));
-         
+
          // may not have successors, ie, exit point
          if(si != succ_end(blk)) {
             bitvector new_out(getMap(*si)->in);
             int total(1);
             si++;
-         
+
             // fold INs into new OUT
             for(succ_iterator e = succ_end(blk); si != e; si++, total++)
                new_out = doMeetWithOperator(meet, new_out, getMap(*si)->in);
-            
+
             cblk->out = new_out;
          }
-         
+
          bitvector new_in = transfer2(*cblk);
-         
+
          if(new_in != cblk->in || cblk->first_time) {
             // add all successors
             cblk->in = new_in;
@@ -545,7 +544,7 @@ IterativeFramework::execute(void)
       } else
          assert(false);
    }
-   
+
    // do sanity checks
    for(list<CustomBlock*>::iterator it(cfg2.nodes.begin()), e(cfg2.nodes.end()); it != e; ++it) {
       CustomBlock *cblk(*it);
@@ -559,9 +558,9 @@ IterativeFramework::getInEntry(void) const
 {
    if(fun->empty())
       return bitvector(); // return empty...
-      
+
    BasicBlock& blk(fun->getEntryBlock());
-   
+
    const CustomBlock *cblk(getMap(&blk));
    return cblk->in;
 }
@@ -647,7 +646,7 @@ IterativeFramework::setEmpty(bitvector& v)
 }
 
 bitvector
-unionVect(bitvector& a, bitvector& b)
+IterativeFramework::unionVect(bitvector& a, bitvector& b)
 {
    size_t num(a.size());
 
@@ -665,14 +664,14 @@ bitvector
 IterativeFramework::intersectVect(bitvector& a, bitvector& b)
 {
    size_t num(a.size());
-   
+
    assert(a.size() == b.size());
-   
+
    bitvector ret(num, false);
-   
+
    for(size_t i(0); i < num; i++)
       ret[i] = a[i] && b[i];
-   
+
    return ret;
 }
 

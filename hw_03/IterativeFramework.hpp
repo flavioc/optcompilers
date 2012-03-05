@@ -15,7 +15,7 @@ struct CustomBlock {
 
    bitvector in;
    bitvector out;
-   
+
    bool first_time;
    bool in_queue;
 };
@@ -63,7 +63,7 @@ public:
       DIRECTION_FORWARD,
       DIRECTION_BACKWARD
    } direction_t;
-   
+
    typedef enum {
       MEET_UNION,
       MEET_INTERSECTION
@@ -77,13 +77,22 @@ public:
 
    void execute(void);
    bitvector getInEntry(void) const;
-   
+
     virtual bool runIterativeFramework(transfer_function transfer /*, meet_op, set_boundary, set_initial*/);
 
     virtual bool printProgramPoints();
 
     virtual bool printCFG();
 
+    static bitvector doMeetWithOperator(meet_operator_t, bitvector&, bitvector&);
+    static void printVector(bitvector&);
+    static bitvector unionVect(bitvector&, bitvector&);
+    static bitvector intersectVect(bitvector&, bitvector&);
+    static void setEmpty(bitvector&);
+    static void removeElements(bitvector&, bitvector&, bitvector&);
+
+    CustomBlock *getMap(BasicBlock *);
+    const CustomBlock *getMap(BasicBlock *) const;
 
 private:
 
@@ -112,16 +121,6 @@ private:
     virtual bool buildCFG(Function &F);    // Here we are trying to build the CFG of our program.
 
     void buildDataFlowGraph(Function &, bitvector&);
-    CustomBlock *getMap(BasicBlock *);
-    const CustomBlock *getMap(BasicBlock *) const;
-    
-    static bitvector doMeetWithOperator(meet_operator_t, bitvector&, bitvector&);
-    
-    static void printVector(bitvector&);
-    static bitvector unionVect(bitvector&, bitvector&);
-    static bitvector intersectVect(bitvector&, bitvector&);
-    static void setEmpty(bitvector&);
-    static void removeElements(bitvector&, bitvector&, bitvector&);
 };
 
 //}
