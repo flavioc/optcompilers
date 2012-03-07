@@ -65,14 +65,14 @@ using namespace std;
 namespace
 {
 
-class ReachingDef;
-ReachingDef *ptr;
+class LICM;
+LICM *ptr;
 static bitvector doRunPass(CustomBlock&);
 static bitvector doRunPassForIV(CustomBlock&);
 static bitvector doPromotePassForIV(CustomBlock&);
 static bitvector doDomPass(CustomBlock&);
 
-class ReachingDef : public ModulePass
+class LICM : public ModulePass
 {
 
 private:
@@ -94,12 +94,12 @@ public:
 
 	static char ID;
 
-	ReachingDef() :
+	LICM() :
         ModulePass(ID)
 	{
 	}
 
-	~ReachingDef()
+	~LICM()
 	{
 	}
 
@@ -640,8 +640,8 @@ static bitvector doDomPass(CustomBlock& cblk)
 }
 
 
-char ReachingDef::ID = 0;
-RegisterPass<ReachingDef> X("reach", "15745: Iterative Reaching Definition Analysis");
+char LICM::ID = 0;
+RegisterPass<LICM> X("licm-pass", "15745: Loop invariant code motion");
 
 }
 

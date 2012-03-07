@@ -8,4 +8,22 @@ To run the examples
 $ make load
 
 
-Note: The program simply prints out the instructions block by block and applies annotations.
+NOTE: make sure the path to llvm-config is properly set in the makefile.
+
+Note: This pass will iterate through several analysis phases required for
+Loop-Invariant code motion. During each pass it will print out the results of
+the analysis. After it computes reaching definitions, dominator graph, DFS on
+the dominator graph, it will begin the code promotion phase.
+
+During this phases the screen will print out the before and after view of each
+candidate Basic Block. If the before and after differ then an invariant was
+promoted.
+
+Note, in order for this to be useful some flags do need to be turned on namely
+-mem2reg and -disable-inlining for opt and -O0 for clang. I realize we are not
+supposed to use additional passes, but if optimization is not disabled for
+clang then there will be no work for this phase to do. Additionally if -O0 is
+used on clang then the resulting code will have many loads and stores. This
+pass is extremely conservative when dealing with memory operations so the
+mem2reg does give the pass more opportunities to do its code motion. the last
+flag -disable-inlining is not necessary, but made debugging a bit easier.
