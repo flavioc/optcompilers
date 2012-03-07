@@ -1,5 +1,8 @@
+#undef NDEBUG
+
 #include "IterativeFramework.hpp"
 #include "Variables.hpp"
+#include "BlockVariables.hpp"
 
 #include "llvm/BasicBlock.h"
 #include "llvm/Constants.h"
@@ -28,10 +31,18 @@
 
 #define GET_NAME1(VALUE) ((VALUE)->getName().str())
 #define GET_INDEX1(VALUE) (inv_var->getVarIndex(GET_NAME1(VALUE)))
+#define IS_INV(VALUE) (out[GET_INDEX1(VALUE)])
 #define INV_VALUE(VALUE) do {                                           \
-            cout << "Variable " << GET_NAME1(VALUE) << " (" << GET_INDEX1(VALUE) << ") is invariant\n"; \
-            out[GET_INDEX1(VALUE)] = true;                               \
-        } while(false)
+        cout << "Variable " << GET_NAME1(VALUE) << " (" << GET_INDEX1(VALUE) << ") is invariant\n"; \
+        out[GET_INDEX1(VALUE)] = true;                                  \
+    } while(false)
+
+#define GET_NAME_DOM(VALUE) ((VALUE)->getName().str())
+#define GET_INDEX_DOM(VALUE) (globalBlkVars->getVarIndex(GET_NAME_DOM(VALUE)))
+#define ADD_DOM(VALUE) do {                                           \
+        cout << "Block " << GET_NAME_DOM(VALUE) << " (" << GET_INDEX_DOM(VALUE) << "/"<< out.size() << ") dominates\n"; \
+        out[GET_INDEX_DOM(VALUE)] = true;                                \
+    } while(false)
 
 
 #define GET_NAME2(VALUE) ((VALUE)->getName().str())
@@ -39,13 +50,13 @@
 #define IS_DEFINED(VALUE,POINT) (POINT[GET_INDEX2(VALUE)])
 
 #define GEN_VALUE(VALUE) do {                                           \
-            cout << "Variable " << GET_NAME2(VALUE) << " (" << GET_INDEX2(VALUE) << ") was generated\n"; \
-            out[GET_INDEX2(VALUE)] = true;                               \
-        } while(false)
+        cout << "Variable " << GET_NAME2(VALUE) << " (" << GET_INDEX2(VALUE) << ") was generated\n"; \
+        out[GET_INDEX2(VALUE)] = true;                                  \
+    } while(false)
 #define KILL_VALUE(VALUE) do {                                          \
-            cout << "Variable " << GET_NAME2(VALUE) << " (" << GET_INDEX2(VALUE) << ") was killed\n"; \
-            out[GET_INDEX2(VALUE)] = false;                              \
-        } while(false)
+        cout << "Variable " << GET_NAME2(VALUE) << " (" << GET_INDEX2(VALUE) << ") was killed\n"; \
+        out[GET_INDEX2(VALUE)] = false;                                 \
+    } while(false)
 
 
 using namespace llvm;
@@ -58,6 +69,8 @@ class ReachingDef;
 ReachingDef *ptr;
 static bitvector doRunPass(CustomBlock&);
 static bitvector doRunPassForIV(CustomBlock&);
+static bitvector doPromotePassForIV(CustomBlock&);
+static bitvector doDomPass(CustomBlock&);
 
 class ReachingDef : public ModulePass
 {
@@ -67,10 +80,15 @@ private:
     // For reaching def
     Variables *cur;
 
+    BlockVariables *globalBlkVars;
     // for invariant detection
     Variables *inv_var;
+    IterativeFramework *globalDom;
     IterativeFramework *globalRD;
+    IterativeFramework *globalIV;
+    map<BasicBlock*,BasicBlock*> *globalPredDominatorTree;
 
+    Function *globalFun;
 
 public:
 
@@ -89,8 +107,225 @@ public:
     virtual void getAnalysisUsage(AnalysisUsage &AU) const
     {
         AU.setPreservesAll();
+
+        AU.addRequired<DominatorTree>();
+
         AU.addRequired<LoopInfo>();
-//        AU.addRequired<DominatorTree>();
+    }
+
+
+    // x dom y -> domGraph[x]=y
+    multimap<BasicBlock*,BasicBlock*> domGraph;
+
+// Adapted from: http://163.25.101.87/~yen3/wiki/doku.php?id=llvm:llvm_notes
+    virtual multimap<BasicBlock*,BasicBlock*> printDomGraph(Function &F)
+    {
+        DominatorTree &DT = getAnalysis<DominatorTree>(F);
+
+        cout << "================= Creating DOM BI =================" << endl;
+
+        for(Function::iterator bbi = F.begin(), bbie = F.end(); bbi != bbie; bbi++){
+            BasicBlock *BBI = bbi;
+            for(Function::iterator bbj = F.begin(), bbje = F.end(); bbj != bbje; bbj++){
+                BasicBlock *BBJ = bbj;
+                if(BBI != BBJ && DT.dominates(BBI, BBJ))
+                {
+                    errs() << BBI->getName() << " doms " << BBJ->getName()<< "\n";
+                    domGraph.insert(pair<BasicBlock*, BasicBlock*>(BBI,BBJ));
+                }
+            }
+        }
+        cout << "================ End Creating DOM BI ===============" << endl;
+
+        return domGraph;
+    }
+
+// takes what was made in the iterative pass and converts it to something more useful
+    // uses globalDom
+    virtual multimap<BasicBlock*,BasicBlock*> convertDomVectsIntoGraph(Function &F)
+    {
+        cout << "================= Creating DOM BI =================" << endl;
+
+        for(Function::iterator bbi = F.begin(), bbie = F.end(); bbi != bbie; bbi++){
+            BasicBlock *BBI = bbi;
+            for(Function::iterator bbj = F.begin(), bbje = F.end(); bbj != bbje; bbj++){
+                BasicBlock *BBJ = bbj;
+                CustomBlock *first = globalDom->getMap(BBI);
+                if(BBI != BBJ)
+                {
+                    CustomBlock *second = globalDom->getMap(BBJ);
+                    bitvector dominators(second->out);
+
+                    if(dominators[GET_INDEX_DOM(BBI)])
+                    {
+                        errs() <<""<< BBI->getName()  << " doms " << BBJ->getName()<< "\n";
+                        domGraph.insert(pair<BasicBlock*, BasicBlock*>(BBI,BBJ));
+
+                    }
+                }
+            }
+        }
+        cout << "================ End Creating DOM BI ===============" << endl;
+
+        return domGraph;
+    }
+
+    virtual map<BasicBlock*,BasicBlock*> doDFSOnDomGraph(multimap<BasicBlock*,BasicBlock*> domGraph,Function &F)
+    {
+        // x dom y -> dominator[x]
+        multimap<BasicBlock*,BasicBlock*> dominatorTree(domGraph);
+        map<BasicBlock*,BasicBlock*> predDominatorTree;
+
+
+        // now for some DFS magic
+        list<BasicBlock*> st;
+        map<BasicBlock*, bool> visited;
+
+        BasicBlock *entry = &F.getEntryBlock();
+
+        cout << "================= Computing DFS =================" << endl;
+
+
+
+        visited[entry]=true;
+        st.push_back(entry);
+
+        while(!st.empty())
+        {
+            multimap<BasicBlock*,BasicBlock*>::iterator it;
+            BasicBlock *t = st.back();
+            st.pop_back();
+
+            for ( it=dominatorTree.begin() ; it != dominatorTree.end(); it++ )
+                if(!visited[it->second])
+                {
+                    BasicBlock *v = (BasicBlock*)(it->second);
+                    predDominatorTree[v]=t;
+                    st.push_back(v);
+                    visited[v] = true;
+
+                    errs() << t->getName() <<  " -> " << v->getName() << "\n";
+
+                }
+
+        }
+        cout << "=========== Computing DFS Complete ==============" << endl;
+
+        return predDominatorTree;
+    }
+
+
+    bitvector doComputeDom(CustomBlock& cblk)
+    {
+        BasicBlock *blk(cblk.blk);
+
+        cout << "==================================================\n";
+
+        // if this is the boundary we want to du something special
+        if(blk == globalFun->begin())
+        {
+            bitvector out(globalBlkVars->getEmptySet());
+            ADD_DOM(blk);
+            return out;
+        }
+        else
+        {
+
+            // This vector is for flagging invariants.
+            bitvector out(cblk.in);
+
+            ADD_DOM(blk);
+
+            for(int i =0; i < out.size(); i++)
+                errs() << out[i];
+            errs() << "\n";
+
+            // this is the new out
+            return out;
+        }
+    }
+
+
+    bitvector doPromoteInvariantPass(CustomBlock& cblk)
+    {
+        BasicBlock *blk(cblk.blk);
+        BasicBlock *immediateDomBlock;
+
+        // This vector is for flagging invariants.
+        bitvector out(cblk.in);
+
+        // now we need the dominator
+        immediateDomBlock = (*globalPredDominatorTree)[blk];
+
+        // We are not in a loop
+        if(immediateDomBlock == NULL )
+            return out;
+
+        Instruction *domLastInst = &immediateDomBlock->back();
+
+        // We want the out of the reaching definitions for the dominator block
+        bitvector definedByDominators(globalRD->getMap(immediateDomBlock)->out);
+        BasicBlock::InstListType &ls(blk->getInstList());
+
+        // We need the invariant information from the previous pass
+        CustomBlock *ivcblk = globalIV->getMap(blk);
+        bitvector ivVect(ivcblk->out);
+
+        list<Instruction*> toBePromoted;
+
+
+        cout << "==================================================\n";
+        cout << "-------- OLD ---------\n";
+        immediateDomBlock->dump();
+        blk->dump();
+        cout << "------ END OLD -------\n\n";
+
+        // iterate the instructions in order
+        for(BasicBlock::InstListType::iterator it(ls.begin()), e(ls.end()); it != e; it++)
+        {
+            User::op_iterator OI, OE;
+
+#if 0 // i need to revisit this
+            // need to handle stores and loads with care
+            if(isa<StoreInst>(it))
+            {
+                StoreInst *li = (StoreInst*)&it;
+
+            }
+            else if(isa<LoadInst>(it))
+            {
+
+            }
+#endif
+            // if this a void type skip it:
+            if(it->getType()->isVoidTy())
+                continue;
+
+            // we want to check if this instruction was flagged in the
+            // IV pass.
+            if(IS_DEFINED(it,ivVect))
+                toBePromoted.push_back(it);
+        }
+
+
+        // We are going to take the list of instructions and promote them
+        for(list<Instruction*>::iterator it(toBePromoted.begin()), e(toBePromoted.end());it != e; ++it)
+        {
+            Instruction *inst = (Instruction*)*it;
+
+            inst->moveBefore(domLastInst);
+
+        }
+
+        cout << "-------- NEW ---------\n";
+        immediateDomBlock->dump();
+        blk->dump();
+        cout << "------ END NEW -------\n";
+
+
+
+        // this is the new out
+        return out;
     }
 
     // At the block
@@ -100,34 +335,23 @@ public:
     bitvector doIsInvariantPass(CustomBlock& cblk)
     {
         LoopInfo &LI = getAnalysis<LoopInfo>(*(cblk.blk->getParent()));
-        Loop *loop   = LI.getLoopFor(cblk.blk);
-
-
-        // must start reading IN
-        bitvector out(cblk.in);
-
-        // We need the reaching def info for this block
-        bitvector rdIn(globalRD->getMap(cblk.blk)->in);
-        //bitvector rdIn(globalRD->getMap(cblk.blk->getSinglePredecessor())->in);
-
-
-
-
-
-        //LoopInfo LI;
-
         BasicBlock *blk(cblk.blk);
+        Loop *loop   = LI.getLoopFor(blk);
+        BasicBlock *immediateDomBlock;
 
+        // This vector is for flagging invariants.
+        bitvector out(cblk.in);
         if(loop  == NULL)
-        {
-
             // nothing has changed
             return cblk.out;
-        }
 
+        // now we need the dominator
+        immediateDomBlock = (*globalPredDominatorTree)[blk];
+        assert(immediateDomBlock != NULL);
 
+        // We want the out of the reaching definitions for the dominator block
+        bitvector definedByDominators(globalRD->getMap(immediateDomBlock)->out);
         BasicBlock::InstListType &ls(blk->getInstList());
-
 
         cout << "==================================================\n";
 
@@ -135,69 +359,61 @@ public:
 
         cout << "-----------------\n";
 
-        // iterate the instructions in reverse order
+        // iterate the instructions in order
         for(BasicBlock::InstListType::iterator it(ls.begin()), e(ls.end()); it != e; it++)
         {
             User::op_iterator OI, OE;
             bool instIsInv = true;
 
+#if 0 // i need to revisit this
+
+            // need to handle stores and loads with care
+            if(isa<StoreInst>(it))
+            {
+                StoreInst *li = (StoreInst*)&it;
+                //cout << "store: " << IS_DEFINED(li->getPointerOperand(),definedByDominators) << endl;
+                errs() << "store: " << li->getPointerOperand()->getName() << "\n";
+            }
+            else if(isa<LoadInst>(it))
+            {
+                //LoadInst *li = (LoadInst*)&it;
+                //cout << "load: " << IS_DEFINED(li->getPointerOperand(),definedByDominators) << endl;
+            }
+
+#endif
+
+            // need to handle phinodes with care
+            if(isa<PHINode>(it))
+                continue;
+
             // if this a void type skip it:
             if(it->getType()->isVoidTy())
                 continue;
 
-#if 1
-            // for testing purposes we will use the built-in loop inv testing functionality
-            if(!loop->hasLoopInvariantOperands(it))
-                instIsInv = false;
-#else
             for(OI = it->op_begin(), OE = it->op_end(); OI != OE; ++OI)
             {
                 Value *val = *OI;
 
                 // These are the arguments
                 if(isa<Instruction>(val) || isa<Argument>(val))
-                {
                     // we need to test if IT is invariant:
                     // all of its arguments are defined outside the block, or by other invariants.
-
-
                     // is this argument already defined at entry time?
                     // is this variable invariant?
-                    if(IS_DEFINED(val,rdIn))
-                    {
+                    if(IS_DEFINED(val,definedByDominators)|| IS_INV(val))
                         instIsInv&=true;
-
-                    }
                     else
                     {
                         instIsInv&=false;
                         break;
                     }
-
-                }
-
-
             }
-#endif
             if(instIsInv)
-            {
-                assert(!it->getType()->isVoidTy());
-                cout << "void type: " << it->getType()->isVoidTy() << endl;
-                cout << "zomg this is working: "<< GET_NAME1(it) << endl;
-                // Add this to the INV_VALUE
                 INV_VALUE(it);
-            }
-            if(loop->hasLoopInvariantOperands(it))
-                cout << "This is really loop invariant: : "<< GET_NAME1(it) << endl;
-
         }
-
 
         // this is the new out
         return out;
-
-
-
     }
 
     // At the block
@@ -295,17 +511,20 @@ public:
                         KILL_VALUE(value);
                     }
                 }
-            } else {
-                cout << "WARNING!!! THIS INSTRUCTION IS NOT SUPPORTED\n";
-                i.dump();
-                assert(false);
+            }
+            else {
+                //cout << "WARNING!!! THIS INSTRUCTION IS NOT SUPPORTED\n";
+                //i.dump();
+                //assert(false);
             }
         }
 
+        for(int i =0; i < out.size(); i++)
+            errs() << out[i];
+        errs() << "\n";
+
         // this is the new out
         return out;
-
-
     }
 
 
@@ -319,45 +538,79 @@ public:
 
         ptr = this;
 
-
-//            DominatorTree &DT =  getAnalysis<DominatorTree>(fun);
-//            LoopInfo &LI      =  getAnalysis<LoopInfo>();
-
         for (Module::iterator MI = M.begin(), ME = M.end(); MI != ME; ++MI)
         {
             Function& fun(*MI);
 
+            globalFun = &fun;
+
             if(fun.empty())
                 continue;
 
+            cout <<endl<< "=================== REACH DEF PHASE =======================" <<endl;
             // for reaching def
             Variables vars(fun);
-
-            // for invariant
-            Variables vars2(fun);
+            cur = &vars;
 
             IterativeFramework rd(fun,IterativeFramework::DIRECTION_FORWARD,
                                   IterativeFramework::MEET_UNION, doRunPass,
                                   vars.getFlagedFunctionArgs() );
+            rd.execute();
+            // We need to keep rd so we can pass it to IV
+            globalRD = &rd;
+            cout <<endl<< "================= END REACH DEF PHASE =====================" <<endl;
+
+
+            cout <<endl<< "================== COMPUTE DOM GRAPH =======================" <<endl;
+            BlockVariables blkVars(fun);
+            globalBlkVars = &blkVars;
+            IterativeFramework domPass(fun,IterativeFramework::DIRECTION_FORWARD,
+                                       IterativeFramework::MEET_INTERSECTION, doDomPass,
+                                       blkVars.getUniversalSet() );
+            domPass.execute();
+            globalDom = &domPass;
+
+            // TODO: I need to compute the dominator graph
+//            multimap<BasicBlock*,BasicBlock*> domGraph(printDomGraph(fun));
+            multimap<BasicBlock*,BasicBlock*> domGraph(convertDomVectsIntoGraph(fun));
+
+            // DFS Stage
+            map<BasicBlock*,BasicBlock*> predDominatorTree(doDFSOnDomGraph(domGraph,fun));
+
+            globalPredDominatorTree = &predDominatorTree;
+
+
+            cout <<endl<< "================ END COMPUTE DOM GRAPH =====================" <<endl;
+
+
+
+
+
+
+            cout <<endl<< "=================== IV DETECT PHASE =======================" <<endl;
+            // for invariant
+            Variables vars2(fun);
+            // stash these pointers in some globals.
+            inv_var = &vars2;
+
 
             IterativeFramework iv(fun,IterativeFramework::DIRECTION_FORWARD,
                                   IterativeFramework::MEET_UNION, doRunPassForIV,
                                   vars2.getEmptySet() );
-
-
-            cur = &vars;
-            rd.execute();
-
-            // We need to keep rd so we can pass it to IV
-            globalRD = &rd;
-
-
-            cout <<endl<< "=================== IV PHASE =======================" <<endl;
-
-
             iv.execute();
+            globalIV = &iv;
 
-            cout <<endl<< "================= END IV PHASE =====================" <<endl;
+            cout <<endl<< "================= END IV DETECT PHASE =====================" <<endl;
+
+            cout <<endl<< "=================== IV PROMOTE PHASE =======================" <<endl;
+
+            IterativeFramework ivprm(fun,IterativeFramework::DIRECTION_FORWARD,
+                                  IterativeFramework::MEET_UNION, doPromotePassForIV,
+                                  vars2.getEmptySet() );
+            ivprm.execute();
+
+            cout <<endl<< "================= END IV PROMOTE PHASE =====================" <<endl;
+
         }
 
 
@@ -374,6 +627,16 @@ static bitvector doRunPass(CustomBlock& cblk)
 static bitvector doRunPassForIV(CustomBlock& cblk)
 {
     return ptr->doIsInvariantPass(cblk);
+}
+
+static bitvector doPromotePassForIV(CustomBlock& cblk)
+{
+    return ptr->doPromoteInvariantPass(cblk);
+}
+
+static bitvector doDomPass(CustomBlock& cblk)
+{
+    return ptr->doComputeDom(cblk);
 }
 
 

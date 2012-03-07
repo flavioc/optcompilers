@@ -1,4 +1,4 @@
-#if 0
+#if 1
 int g;
 int g_incr (int c)
 {
@@ -57,17 +57,32 @@ int loop3(int a, int b, int c)
    return ret + g;
 }
 
-#endif
-
 int loop4(int a, int b, int c)
 {
-    int inv = a +b;
+
+   for(; a < b; a++)
+   {
+        int inv;
+       inv = c + b;
+       printf("%i, %i",a,inv);
+   }
+   printf("%i",c);
+   return c;
+}
+
+#endif
+
+int loop5(int a, int b, int c)
+{
+    int inv;
 
    for(; a < b; a++)
    {
        inv = c + b;
-       //printf("%i, %i",a,inv);
    }
-   printf("%i",c);
+
    return inv;
 }
+
+
+

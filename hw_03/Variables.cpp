@@ -1,14 +1,17 @@
-
 #undef NDEBUG
 #include "Variables.hpp"
 #include "llvm/InstrTypes.h"
 #include "llvm/Instructions.h"
 
 #include <iostream>
+#include <ostream>
+#include <sstream>
 
 using namespace llvm;
 using namespace std;
 
+Variables::Variables()
+{}
 Variables::Variables(Function& f)
 {
    giveInstructionsNames(f);
@@ -43,12 +46,15 @@ Variables::getFlagedFunctionArgs(void) const
      out[GET_INDEX(VALUE)] = true;   \
      } while(false)
 
-    bitvector out(vars.size(), true);
+    bitvector out(vars.size(), false);
+
 
     for (Function::arg_iterator AI = fun->arg_begin(), AE = fun->arg_end();
          AI != AE; ++AI)
         if(!AI->getType()->isVoidTy())
             GEN_VALUE(AI);
+
+
 
     return out;
 
@@ -91,15 +97,26 @@ Variables::giveInstructionsNames(Function& F)
         {
             if (!I->hasName() && !I->getType()->isVoidTy())
                 I->setName("tmp");
-
-            // Need to give arguments names as well.
-            for(User::op_iterator OI = I->op_begin(), OE=I->op_end(); OI != OE; ++OI)
+            else if (!I->hasName() && isa<StoreInst>(I))
             {
-                Value *val = *OI;
+                StoreInst *si = (StoreInst*)&I;
+                Value *ptr(si->getPointerOperand());
+                Value *val(si->getValueOperand());
 
-                if (isa<Argument>(val) && !val->hasName() && !val->getType()->isVoidTy())
-                    val->setName("iarg");
+                if(!val->hasName())
+                    val->setName("val");
+
+                if(!ptr->hasName())
+                    si->setName("store");
+
+                assert(si != NULL);
+                assert(ptr != NULL);
+                //assert(false);
+
+                //
+
             }
+
         }
     }
 }
@@ -134,59 +151,22 @@ Variables::buildVarsVector(Function& F)
 
    for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB) {
       for (BasicBlock::iterator I = BB->begin(), E = BB->end(); I != E; ++I) {
-         assert(I->hasName() || I->getType()->isVoidTy());
+          assert(I->hasName() || (I->getType()->isVoidTy()/*&& !isa<StoreInst>(I)*/));
          Instruction &i(*I);
-         
+
          if(isa<StoreInst>(i)) {
             StoreInst *s((StoreInst*)&i);
             Value *ptr(s->getPointerOperand());
             Value *val(s->getValueOperand());
-            
+
             addVariable(ptr->getName());
             addVariable(val->getName());
+
          } else if(!i.getType()->isVoidTy()) {
             addVariable(i.getName());
          }
       }
    }
-
-    // We need to add function arguments to this list.
-    for (Function::arg_iterator AI = F.arg_begin(), AE = F.arg_end();
-         AI != AE; ++AI)
-    {
-        if(!AI->getType()->isVoidTy())
-            addVariable(AI->getName());
-    }
-
-    // now for all other variables
-    for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB) {
-        for (BasicBlock::iterator I = BB->begin(), E = BB->end(); I != E; ++I) {
-            assert(I->hasName() || I->getType()->isVoidTy());
-            Instruction &i(*I);
-
-            if(isa<StoreInst>(i)) {
-                StoreInst *s((StoreInst*)&i);
-                Value *ptr(s->getPointerOperand());
-                Value *val(s->getValueOperand());
-
-                addVariable(ptr->getName());
-                addVariable(val->getName());
-            } else if(!i.getType()->isVoidTy())
-            {
-                addVariable(i.getName());
-                // lastly, we need to add the arguments.
-                for(User::op_iterator OI = I->op_begin(), OE=I->op_end(); OI != OE; ++OI)
-                {
-                    Value *val = *OI;
-
-                    if (isa<Argument>(val))
-                        addVariable(val->getName());
-                }
-
-            }
-
-        }
-    }
 
 }
 

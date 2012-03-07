@@ -11,7 +11,7 @@
 
 class Variables
 {
-private:
+protected:
 
     typedef std::map<std::string, size_t> var_vector;
     typedef std::vector<std::string> var_names;
@@ -21,23 +21,24 @@ private:
 
     llvm::Function *fun;
 
-    void giveInstructionsNames(llvm::Function&);
-    void buildVarsVector(llvm::Function&);
-    void addVariable(const std::string&);
+    virtual void giveInstructionsNames(llvm::Function&);
+    virtual void buildVarsVector(llvm::Function&);
+    virtual void addVariable(const std::string&);
 
 public:
 
     typedef std::vector<bool> bitvector; // XXX duplicate from IterativeFramework
 
-    bitvector getUniversalSet(void) const;
-    bitvector getEmptySet(void) const;
-    bitvector getFlagedFunctionArgs(void) const;
+    virtual bitvector getUniversalSet(void) const;
+    virtual bitvector getEmptySet(void) const;
+    virtual bitvector getFlagedFunctionArgs(void) const;
 
-    size_t getVarIndex(const std::string&) const;
-    std::string getVarName(const size_t) const;
-    void printVars(void) const;
+    virtual size_t getVarIndex(const std::string&) const;
+    virtual std::string getVarName(const size_t) const;
+    virtual void printVars(void) const;
 
-    explicit Variables(llvm::Function&);
+    Variables();
+    Variables(llvm::Function&);
 
     ~Variables(void) {}
 };
