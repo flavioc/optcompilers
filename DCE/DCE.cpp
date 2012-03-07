@@ -87,6 +87,14 @@ public:
                 MARK_NOT_FAINT(op);
              }
           }
+          
+          // deal with global stores
+          if(isa<GlobalValue>(ptr)) {
+             if(!IS_VALUE_FAINT(ptr))
+                MARK_NOT_FAINT(ptr);
+             if(!isa<Constant>(op) && IS_VALUE_FAINT(op))
+                MARK_NOT_FAINT(op);
+          }
        } else if(isa<ReturnInst>(i)) {
           ReturnInst *r((ReturnInst*)&i);
           Value *ret(r->getReturnValue());
