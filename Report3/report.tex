@@ -25,7 +25,11 @@
    \item Top value: Empty set.
    \item Bottom value: All variables in the module.
    \item Initialization: Using the bottom value (all variables).
-   \item Transfer function: $F(x) = X - (ReturnsPrintsControlGlobal \cup Assignments(X))$, where $ReturnsPrintsControlGlobal$ are variables used in control structures, function calls, returns and global variables and $Assignments(X)$ are variables that are used at the right side of assignments of non-faint variables.
+   \item Transfer function: $F(x) = X - (ReturnsPrintsControlGlobal \cup Assignments(X))$:
+  \begin{itemize}
+   \item $ReturnsPrintsControlGlobal$ are variables used in control structures, function calls, returns and global variables.
+   \item $Assignments(X)$ are variables that are used at the right side of assignments of non-faint variables.
+   \end{itemize}
 \end{itemize}
 
 \subsection{Implementation}
