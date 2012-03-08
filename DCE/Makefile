@@ -42,7 +42,7 @@ load: global.opt \
 	faint.opt faint.unopt \
 	float.opt float.unopt \
 	multiple.opt multiple.unopt \
-	atoi.opt \
+	sqrt.opt \
 	vector.opt \
 	switch.opt \
 	if.opt \
@@ -74,5 +74,5 @@ compile:
 	$(LLVM) multiple.c
 	$(LLVM) vector.c
 	$(LLVM) global.c
-	$(LLVM) atoi.c
+	$(LLVM) sqrt.c
 	$(LLVM) for-fi.c
