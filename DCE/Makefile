@@ -37,16 +37,17 @@ TEST = opt -load $(FILE).so -dce-pass
 clean-examples:
 	rm -f *.opt *.unopt *.opt.o *.unopt.o
 
-load: cast.opt cast.unopt \
-	faint.opt faint.unopt faint.llvm \
-	float.opt float.unopt float.llvm \
-	multiple.opt multiple.unopt multiple.llvm \
-	vector.opt
-#unreachable.opt unreachable.unopt
-#switch.opt switch.unopt
-# if.opt if.unopt \
-# simple.opt simple.unopt \
-#for-fi.opt for-fi.unopt
+load: global.opt \
+	cast.opt \
+	faint.opt faint.unopt \
+	float.opt float.unopt \
+	multiple.opt multiple.unopt \
+	atoi.opt \
+	vector.opt \
+	switch.opt \
+	if.opt \
+	simple.opt \
+	for-fi.opt
 
 %.opt.o: %.o
 	$(TEST) $^ -o $@
@@ -54,12 +55,6 @@ load: cast.opt cast.unopt \
 %.opt: %.opt.o
 	llc $^ -o $@.s
 	clang $@.s -o $@
-
-%.llvm: %.o
-	opt -dce $^ -o $@.o
-	llc $@.o -o $@.s
-	clang $@.s -o $@
-	rm -f $@.o
 
 %.unopt: %.o
 	llc $^ -o $@.s
@@ -78,3 +73,6 @@ compile:
 	$(LLVM) float.c
 	$(LLVM) multiple.c
 	$(LLVM) vector.c
+	$(LLVM) global.c
+	$(LLVM) atoi.c
+	$(LLVM) for-fi.c
