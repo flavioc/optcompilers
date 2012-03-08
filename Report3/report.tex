@@ -25,14 +25,14 @@
    \item Top value: Empty set.
    \item Bottom value: All variables in the module.
    \item Initialization: Using the bottom value (all variables).
-   \item Transfer function: $F(x) = X - (ReturnsPrintsControl \cup Assignments(X))$, where $ReturnsPrintsControl$ are variables used in control structures, function calls and returns and $Assignments(X)$ are variables that are used at the right side of assignments of non-faint variables.
+   \item Transfer function: $F(x) = X - (ReturnsPrintsControlGlobal \cup Assignments(X))$, where $ReturnsPrintsControlGlobal$ are variables used in control structures, function calls, returns and global variables and $Assignments(X)$ are variables that are used at the right side of assignments of non-faint variables.
 \end{itemize}
 
 \subsection{Implementation}
 
 The implementation is very straightforward and follows what was described previously.
 We use the \texttt{Variables} class to name all our variables and to generate the universal set (it is also helpful for debugging purposes). For the transfer function, we go over each instruction in a block and apply the required action for each instruction.
-For example, for a \texttt{load} instruction, we check if the left hand side is not faint, and, if that's the case, we turn the variable in the right hand side into a non-faint variable. When branches or function calls appear we simply make all the variables involved as non-faint, because something important may be done inside that function and we don't want to delete function calls at all.
+For example, for a \texttt{load} instruction, we check if the left hand side is not faint, and, if that's the case, we turn the variable in the right hand side into a non-faint variable. When branches or function calls appear we simply make all the variables involved as non-faint, because something important may be done inside that function and we don't want to delete function calls at all. The exception is when we find a read only function, in that case, we use the same strategy as for simple operations (like +).
 
 An important implementation detail is how we handle arrays. Problems arise when something is stored into the array and the array itself may be used elsewhere (for example, for branches). When some element of the array is changed, a \texttt{store} instruction is used but the value is not propagated, which turns such instruction values as faint and thus can destroy the correctness of the program. In the transfer function, we run a backwards pass over the list of instructions and store to \texttt{arrays} the values of the arrays that are considered non-faint. Then, we turn non-faint \texttt{getelementptr} instructions and corresponding
 stores for such arrays into non-faint and finally, we run a final backwards pass to force all the intermediate instructions and values to be marked as non-faint.
@@ -41,7 +41,7 @@ Once all the faint variables have been located, we do traverse all the instructi
 
 \subsection{Experimental Results}
 
-For all the programs below, we used an unoptimized version, an optimized version using our pass and an optimized version using LLVM dce pass. We executed the programs 3 times and then we used the average execution time. Times are in milliseconds.
+For all the programs below, we used an unoptimized version and an optimized version using our pass. We executed the programs 3 times and then we used the average execution time. Times are in milliseconds.
 
 We used three different programs:
 
@@ -52,12 +52,12 @@ We used three different programs:
 \end{itemize}
 
 \begin{center}
-    \begin{tabular}{ | l | l | l | l | l |}
+    \begin{tabular}{ | l | l | l | l |}
     \hline
-    Program & Our DCE & LLVM DCE & Unoptimized & Our speedup over unoptimized \\ \hline
-    faint.c & 304 & 405 & 407 & 1.34 \\ \hline
-    multiple.c & 531 & 580 & 583 & 1.10 \\ \hline
-    float.c & 586 & 904 & 890 & 1.52 \\ \hline
+    Program & DCE & Unoptimized & Speedup over unoptimized \\ \hline
+    faint.c & 300 & 415 & 1.38 \\ \hline
+    multiple.c & 534 & 579 & 1.08 \\ \hline
+    float.c & 588 & 906 & 1.54 \\ \hline
     \hline
     \end{tabular}
 \end{center}
