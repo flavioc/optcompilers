@@ -27,7 +27,7 @@ protected:
 
 public:
 
-    typedef std::vector<bool> bitvector; // XXX duplicate from IterativeFramework
+    typedef std::vector<bool> bitvector;
 
     virtual bitvector getUniversalSet(void) const;
     virtual bitvector getEmptySet(void) const;
