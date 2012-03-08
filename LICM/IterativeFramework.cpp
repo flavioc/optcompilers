@@ -86,9 +86,9 @@ IterativeFramework::doMeetWithOperator(meet_operator_t meet, bitvector& a, bitve
 {
    switch(meet) {
       case MEET_UNION:
-         return unionVect(a, b);
+          return unionVect(a, b);
       case MEET_INTERSECTION:
-         return intersectVect(a, b);
+          return intersectVect(a, b);
       default:
          assert(false);
    }

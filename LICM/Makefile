@@ -16,8 +16,8 @@ LICM.so: LICM.o IterativeFramework.o Variables.o BlockVariables.o
 clean:
 	rm -f *.o *~ *.so *.finfo *.out *.ll
 
-TEST = opt -load ./LICM.so -mem2reg -disable-inlining -licm-pass
-#TEST = opt -load ./LICM.so  -reach
+#TEST = opt -load ./LICM.so -mem2reg -disable-inlining -licm-pass
+TEST = opt -load ./LICM.so  -licm-pass
 
 load: compile all
 	$(TEST) loop.o -o loop.out

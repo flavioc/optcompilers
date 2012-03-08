@@ -7,7 +7,7 @@
 \usepackage{amsmath}
 \usepackage{amsfonts}   % if you want the fonts
 \usepackage{amssymb}    % if you want extra symbols
-%\usepackage{savetrees}
+\usepackage{savetrees}
 \usepackage{algorithmic}
 \usepackage{graphicx}
 \usepackage{listings}
@@ -62,12 +62,29 @@ We used three different programs:
     \end{tabular}
 \end{center}
 
+\section{Loop Invariant Code Motion}
+Our implementation of Loop Invariant Code motion, builds upon the iterative
+framework that we started in the last assignment and extends upon it by
+allowing domains other than instructions and variables, namely basic
+blocks. In order to fully implement this optimization we had construct several
+other analysis phases which included: reaching definitions, dominator graphs,
+depth first search on the dominator graph, a loop invariant detection phase as
+well as a phase to apply the actual transformation.
+
+As far as experimental results go, this pass is able to effectively find
+opportunities for LICM and apply the proper transformation.
+
 \section{Register Allocation}
 
 \input{register_allocation.tex}
+
+\section{Scheduling}
+\input{sched.tex}
 
 \section{Code}
 
 \input{code_dce.tex}
 
+
+\input{code_licm.tex}
 \end{document}
