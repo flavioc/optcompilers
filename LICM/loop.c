@@ -1,4 +1,4 @@
-#if 1
+#if 0
 int g;
 int g_incr (int c)
 {

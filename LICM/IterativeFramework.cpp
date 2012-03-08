@@ -81,9 +81,28 @@ IterativeFramework::getMap(BasicBlock *blk) const
    return f->second;
 }
 
+
+bitvector
+IterativeFramework::unionVect(bitvector& a, bitvector& b)
+{
+
+   size_t num(a.size());
+
+   assert(a.size() == b.size());
+
+   bitvector ret(num, false);
+
+   for(size_t i(0); i < num; i++)
+      ret[i] = a[i] || b[i];
+
+   return ret;
+}
+
+
 bitvector
 IterativeFramework::doMeetWithOperator(meet_operator_t meet, bitvector& a, bitvector& b)
 {
+
    switch(meet) {
       case MEET_UNION:
           return unionVect(a, b);
@@ -225,21 +244,6 @@ IterativeFramework::setEmpty(bitvector& v)
 {
    for(int i=0; i < v.size();i++)
     v[i]=false;
-}
-
-bitvector
-unionVect(bitvector& a, bitvector& b)
-{
-   size_t num(a.size());
-
-   assert(a.size() == b.size());
-
-   bitvector ret(num, false);
-
-   for(size_t i(0); i < num; i++)
-      ret[i] = a[i] || b[i];
-
-   return ret;
 }
 
 bitvector

@@ -1,14 +1,15 @@
-CXXFLAGS = -rdynamic $(shell $(HOME)/WORKING/builds/current/llvm/bin/llvm-config --cxxflags all) -g
+#CXXFLAGS = -rdynamic $(shell $(HOME)/WORKING/builds/current/llvm/bin/llvm-config --cxxflags all) -g  -W
+CXXFLAGS = $(shell $(HOME)/WORKING/builds/current/llvm/bin/llvm-config --cxxflags all) -g  -W
 #CXXFLAGS = $(shell $(HOME)/llvm/bin/llvm-config --cxxflags all) -g -O0
 
 
 all: LICM.so
 
-LICM.so: LICM.o IterativeFramework.o Variables.o BlockVariables.o
+#LICM.so: IterativeFramework.o LICM.o  Variables.o BlockVariables.o
 
-#LICM.so: LICM.o
+LICM.so: IterativeFramework.o LICM.o  Variables.o BlockVariables.o
 #	g++ -dylib -flat_namespace -undefined suppress LICM.o -o LICM.so
-#	g++ -dylib -flat_namespace -undefined  LICM.o -o LICM.so
+	g++ -shared -flat_namespace -fPIC  IterativeFramework.o LICM.o  Variables.o BlockVariables.o -o LICM.so
 
 %.so: %.o
 	$(CXX) $(CXXFLAGS) -shared -fPIC $^ -o $@
