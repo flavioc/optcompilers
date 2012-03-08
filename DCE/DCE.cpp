@@ -133,14 +133,17 @@ public:
              }
           }
        } else if(isa<CallInst>(i)) {
-          if(!i.getType()->isVoidTy())
-             MARK_NOT_FAINT(&i);
-          
           CallInst *c((CallInst*)&i);
-          for(size_t op(0); op < c->getNumArgOperands(); ++op) {
-             Value *arg(c->getArgOperand(op));
-             if(arg && !isa<Constant>(arg)) {
-                MARK_NOT_FAINT(arg);
+          
+          if(!c->onlyReadsMemory() || !IS_VALUE_FAINT(c)) {
+             
+             if(!i.getType()->isVoidTy() && IS_VALUE_FAINT(c))
+                 MARK_NOT_FAINT(c);
+             for(size_t op(0); op < c->getNumArgOperands(); ++op) {
+                Value *arg(c->getArgOperand(op));
+                if(arg && !isa<Constant>(arg)) {
+                   MARK_NOT_FAINT(arg);
+                }
              }
           }
        } else if(isa<AllocaInst>(i)) {
